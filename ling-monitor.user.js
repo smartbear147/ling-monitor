@@ -110,7 +110,7 @@
         const panel = document.createElement('div');
         panel.id = 'monitor-panel';
         panel.innerHTML = `
-            <div id="monitor-header" style="cursor:move;padding:6px 10px;background:#1a1a2e;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center;">
+            <div id="monitor-header" style="cursor:move;padding:6px 10px;background:#1a1a2e;display:flex;justify-content:space-between;align-items:center;border-radius:10px;">
                 <span style="font-weight:bold;color:#e0c097;">自动监控</span>
                 <span style="display:flex;align-items:center;gap:8px;">
                     <span id="monitor-status" style="font-size:12px;color:#e74c3c;">已停止</span>
@@ -121,13 +121,13 @@
             <div id="monitor-body">
                 <div style="padding:8px 10px;max-height:200px;overflow-y:auto;" id="monitor-log"></div>
                 <div style="padding:6px 10px;border-top:1px solid #444;display:flex;gap:8px;">
-                    <button id="monitor-toggle" style="flex:1;padding:5px;background:#27ae60;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">启动</button>
-                    <button id="monitor-config" style="flex:1;padding:5px;background:#2980b9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">配置</button>
-                    <button id="monitor-clear" style="flex:1;padding:5px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">清日志</button>
+                    <button id="monitor-toggle" style="flex:1;padding:5px;background:#27ae60;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:12px;">启动</button>
+                    <button id="monitor-config" style="flex:1;padding:5px;background:#2980b9;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:12px;">配置</button>
+                    <button id="monitor-clear" style="flex:1;padding:5px;background:#555;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:12px;">清日志</button>
                 </div>
             </div>
         `;
-        panel.style.cssText = 'position:fixed;top:10px;right:10px;width:300px;max-width:calc(100vw - 20px);background:#16213e;border:1px solid #4ecca3;border-radius:8px;z-index:99999;font-family:monospace;font-size:12px;color:#eee;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+        panel.style.cssText = 'position:fixed;top:10px;right:10px;width:300px;max-width:calc(100vw - 20px);background:#16213e;border:1px solid #4ecca3;border-radius:10px;z-index:99999;font-family:monospace;font-size:12px;color:#eee;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
         panel.onclick = function (e) { e.stopPropagation(); };
         document.body.appendChild(panel);
 
