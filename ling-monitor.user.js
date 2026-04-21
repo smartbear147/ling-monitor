@@ -113,7 +113,7 @@
             <div id="monitor-header" style="cursor:move;padding:6px 10px;background:#1a1a2e;display:flex;justify-content:space-between;align-items:center;border-radius:10px;">
                 <span style="font-weight:bold;color:#e0c097;">自动监控</span>
                 <span style="display:flex;align-items:center;gap:8px;">
-                    <span id="monitor-status" style="font-size:12px;color:#e74c3c;border-radius:10px;">已停止</span>
+                    <span id="monitor-status" style="font-size:12px;color:#e74c3c;">已停止</span>
                     <span id="monitor-move" style="cursor:pointer;font-size:16px;color:#aaa;" title="移动位置">&#x2630;</span>
                     <span id="monitor-minimize" style="cursor:pointer;font-size:16px;color:#aaa;" title="缩小">&#x25BC;</span>
                 </span>
