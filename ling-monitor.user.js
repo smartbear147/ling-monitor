@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name 灵界自动监控 (手机版)
+// @name 灵界自动监控
 // @namespace https://ling.muge.info
 // @version 1.0.1
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗，支持手机端拖拽
@@ -114,7 +114,6 @@
                 <span style="font-weight:bold;color:#e0c097;">自动监控</span>
                 <span style="display:flex;align-items:center;gap:8px;">
                     <span id="monitor-status" style="font-size:12px;color:#e74c3c;">已停止</span>
-                    <span id="monitor-move" style="cursor:pointer;font-size:16px;color:#aaa;" title="移动位置">&#x2630;</span>
                     <span id="monitor-minimize" style="cursor:pointer;font-size:16px;color:#aaa;" title="缩小">&#x25BC;</span>
                 </span>
             </div>
@@ -131,48 +130,71 @@
         panel.onclick = function (e) { e.stopPropagation(); };
         document.body.appendChild(panel);
 
-        // 移动功能 (手机端优化)
-        let isMoving = false;
+        // 移动功能 (PC端和手机端通用 - 直接按住拖动)
+        let isDragging = false;
         let startX, startY, initialLeft, initialTop;
 
-        const moveBtn = document.getElementById('monitor-move');
         const header = document.getElementById('monitor-header');
 
-        moveBtn.addEventListener('click', (e) => {
-            isMoving = !isMoving;
-            moveBtn.style.color = isMoving ? '#4ecca3' : '#aaa';
-            if (isMoving) {
-                log('点击屏幕任意位置以移动面板');
-            }
-            e.stopPropagation();
-        });
-
-        document.addEventListener('touchstart', (e) => {
-            if (!isMoving) return;
-            const touch = e.touches[0];
-            startX = touch.clientX;
-            startY = touch.clientY;
+        // 开始拖动 - PC端mousedown + 手机端touchstart
+        const startDrag = (clientX, clientY) => {
+            isDragging = true;
+            startX = clientX;
+            startY = clientY;
             initialLeft = panel.offsetLeft;
             initialTop = panel.offsetTop;
-            e.preventDefault(); // 防止页面滚动
-        }, { passive: false });
+            panel.style.right = 'auto';
+        };
 
-        document.addEventListener('touchmove', (e) => {
-            if (!isMoving) return;
-            const touch = e.touches[0];
-            const deltaX = touch.clientX - startX;
-            const deltaY = touch.clientY - startY;
+        // 拖动中 - 计算新位置
+        const doDrag = (clientX, clientY) => {
+            if (!isDragging) return;
+            const deltaX = clientX - startX;
+            const deltaY = clientY - startY;
             panel.style.left = (initialLeft + deltaX) + 'px';
             panel.style.top = (initialTop + deltaY) + 'px';
-            panel.style.right = 'auto';
+        };
+
+        // 结束拖动
+        const endDrag = () => {
+            isDragging = false;
+        };
+
+        // PC端鼠标事件
+        header.addEventListener('mousedown', (e) => {
+            // 排除按钮点击（如果点击的是status或minimize，不触发拖动）
+            if (e.target.id && (e.target.id.includes('status') || e.target.id.includes('minimize'))) return;
+            startDrag(e.clientX, e.clientY);
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            doDrag(e.clientX, e.clientY);
+        });
+
+        document.addEventListener('mouseup', () => {
+            endDrag();
+        });
+
+        // 手机端触摸事件
+        header.addEventListener('touchstart', (e) => {
+            // 排除按钮点击
+            const target = e.target;
+            if (target.id && (target.id.includes('status') || target.id.includes('minimize'))) return;
+            const touch = e.touches[0];
+            startDrag(touch.clientX, touch.clientY);
             e.preventDefault();
         }, { passive: false });
 
-        document.addEventListener('touchend', (e) => {
-            if (isMoving) {
-                isMoving = false;
-                moveBtn.style.color = '#aaa';
-            }
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const touch = e.touches[0];
+            doDrag(touch.clientX, touch.clientY);
+            e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchend', () => {
+            endDrag();
         });
 
         // 缩小/展开
@@ -376,12 +398,24 @@
     async function waitForProtectorList(timeout = 8000) {
         const start = Date.now();
         while (Date.now() - start < timeout) {
-            const count = document.querySelectorAll('.protector-item').length;
+            const count = document.querySelectorAll('.protector-card').length;
             const list = document.getElementById('encounterProtectorList');
-            if (list && list.textContent.includes('暂无空闲')) return 'empty';
-            if (count > 0) return 'loaded';
+            const listText = list ? list.textContent : '';
+            const hasEmptyText = listText.includes('暂无空闲');
+
+            log(`[waitForProtectorList] cards: ${count}, hasEmptyText: ${hasEmptyText}`);
+
+            if (list && hasEmptyText) {
+                log('[waitForProtectorList] 检测到"暂无空闲"');
+                return 'empty';
+            }
+            if (count > 0) {
+                log('[waitForProtectorList] 列表已加载');
+                return 'loaded';
+            }
             await sleep(800);
         }
+        log('[waitForProtectorList] 超时');
         return 'timeout';
     }
 
@@ -408,19 +442,23 @@
     }
 
     async function findAndHireProtector(attempt) {
+        if (!window.__monitorRunning) return false;
         const protectorPriorities = config.protectors.priorities;
         const maxRetries = config.protectors.maxRetries;
         const retryDelay = config.protectors.retryDelayMs;
 
         // Parse all protectors
-        const items = document.querySelectorAll('.protector-item');
+        const items = document.querySelectorAll('.protector-card');
         if (items.length === 0) {
+            if (!window.__monitorRunning) return false;
             if (attempt < maxRetries) {
                 log(`[尝试${attempt}] 未找到合适护道者，刷新列表...`);
                 dismissModal();
                 await sleep(retryDelay);
+                if (!window.__monitorRunning) return false;
                 clickHireProtector();
                 await sleep(retryDelay);
+                if (!window.__monitorRunning) return false;
                 const loaded = await waitForProtectorList(8000);
                 if (!loaded) return false;
                 return await findAndHireProtector(attempt + 1);
@@ -433,13 +471,13 @@
         items.forEach((item, index) => {
             const nameEl = item.querySelector('.prot-name');
             const realmEl = item.querySelector('.prot-realm');
-            const metaEl = item.querySelector('.prot-meta');
+            const statsEl = item.querySelector('.prot-stats');
             if (!nameEl) return;
             const name = nameEl.textContent.replace(realmEl ? realmEl.textContent : '', '').trim();
             const realm = realmEl ? realmEl.textContent.trim() : '';
             let attack = 0;
-            if (metaEl) {
-                const atkMatch = metaEl.textContent.match(/基础攻击:\s*(\d+)/);
+            if (statsEl) {
+                const atkMatch = statsEl.textContent.match(/攻\s*(\d+)/);
                 if (atkMatch) attack = parseInt(atkMatch[1]);
             }
             protectors.push({ name, realm, attack, index });
@@ -447,12 +485,15 @@
 
         const selected = selectProtectors(protectors, protectorPriorities);
         if (!selected || selected.length === 0) {
+            if (!window.__monitorRunning) return false;
             if (attempt < maxRetries) {
                 log(`[尝试${attempt}] 未找到合适护道者，刷新列表...`);
                 dismissModal();
                 await sleep(retryDelay);
+                if (!window.__monitorRunning) return false;
                 clickHireProtector();
                 await sleep(retryDelay);
+                if (!window.__monitorRunning) return false;
                 const loaded = await waitForProtectorList(8000);
                 if (!loaded) return false;
                 return await findAndHireProtector(attempt + 1);
@@ -463,6 +504,7 @@
 
         // Try each candidate in priority order
         for (let i = 0; i < selected.length; i++) {
+            if (!window.__monitorRunning) return false;
             const candidate = selected[i];
             log(`[尝试${attempt}] 选择: ${candidate.name} ${candidate.realm} 攻击:${candidate.attack} (${candidate.priority})`);
 
@@ -479,13 +521,20 @@
                 return resp;
             };
 
-            // Click this candidate's hire button
-            const items = document.querySelectorAll('.protector-item');
+            // Click this candidate's "协同" button
+            const items = document.querySelectorAll('.protector-card');
             if (items[candidate.index]) {
-                const btn = items[candidate.index].querySelector('.btn-choose-prot');
-                if (btn) btn.click();
+                const btns = items[candidate.index].querySelectorAll('.prot-btn');
+                for (const btn of btns) {
+                    const text = btn.textContent.trim();
+                    if (text.includes('协同') || text.includes('协 同')) {
+                        btn.click();
+                        break;
+                    }
+                }
             }
             await sleep(800);
+            if (!window.__monitorRunning) return false;
 
             // Click confirm
             const confirmed = await clickConfirm();
@@ -495,6 +544,7 @@
                 continue;
             }
             await sleep(800);
+            if (!window.__monitorRunning) return false;
 
             // Check hire response
             const resp = window.__hireResponse;
@@ -512,10 +562,13 @@
             if (hireResult.status === 'failed') {
                 log(` 雇佣失败(code=400): ${hireResult.message}`);
                 log(' 刷新列表重新雇佣...');
+                if (!window.__monitorRunning) return false;
                 dismissModal();
                 await sleep(800);
+                if (!window.__monitorRunning) return false;
                 clickHireProtector();
                 await sleep(800);
+                if (!window.__monitorRunning) return false;
                 const loaded = await waitForProtectorList(8000);
                 if (loaded === 'loaded' || loaded === 'empty') {
                     return await findAndHireProtector(attempt + 1);
@@ -538,12 +591,15 @@
         }
 
         // All candidates in this attempt failed
+        if (!window.__monitorRunning) return false;
         if (attempt < maxRetries) {
             log(`[尝试${attempt}] 当前列表所有护道者不可用，刷新...`);
             dismissModal();
             await sleep(retryDelay);
+            if (!window.__monitorRunning) return false;
             clickHireProtector();
             await sleep(retryDelay);
+            if (!window.__monitorRunning) return false;
             const loaded = await waitForProtectorList(8000);
             if (!loaded) return false;
             return await findAndHireProtector(attempt + 1);
@@ -615,9 +671,11 @@
     let shopping = false;
     async function handleMerchant() {
         if (shopping) return;
+        if (!window.__monitorRunning) return;
         shopping = true;
         try {
             log('遇到云游商人！');
+            if (!window.__monitorRunning) { shopping = false; return; }
             const mcfg = config.merchant;
             const items = document.querySelectorAll('.merchant-item');
             if (items.length === 0) {
@@ -671,13 +729,11 @@
 
             // 关闭商人窗口
             await sleep(500);
+            if (!window.__monitorRunning) { shopping = false; return; }
             const leaveBtn = document.getElementById('merchantLeaveBtn');
             if (leaveBtn) leaveBtn.click();
 
-            // 重新勾选自动
-            await sleep(500);
-            toggleAutoCheckbox(true);
-            log('已重新勾选自动');
+            log('云游商人已处理');
         } catch (e) {
             log('商人错误: ' + e.message);
         }
@@ -700,6 +756,11 @@
     let lastEncounterTime = 0;
     async function tryEscape(maxAttempts = 5) {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            // 检查是否已停止
+            if (!window.__monitorRunning) {
+                log('脚本已停止，退出逃跑流程');
+                return false;
+            }
             log(`逃跑尝试 ${attempt}/${maxAttempts}...`);
             // Click 逃跑 button
             const overlay = document.getElementById('encounterOverlay');
@@ -721,6 +782,10 @@
 
             // 等待800ms后检查遭遇面板是否还在
             await sleep(800);
+            if (!window.__monitorRunning) {
+                log('脚本已停止，退出逃跑流程');
+                return false;
+            }
             const o = document.getElementById('encounterOverlay');
             const stillVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
             if (!stillVisible) {
@@ -737,6 +802,7 @@
     // --- 雇佣护道者主流程 ---
     async function hireProtector() {
         if (hiring) return;
+        if (!window.__monitorRunning) return; // 检查是否已停止
         hiring = true;
         const now = Date.now();
         if (now - lastEncounterTime < 10000) {
@@ -746,6 +812,7 @@
         lastEncounterTime = now;
         try {
             log('遭遇妖兽！开始雇佣流程...');
+            if (!window.__monitorRunning) { hiring = false; return; }
             const overlay = document.getElementById('encounterOverlay');
             if (!overlay) {
                 log('未找到遭遇界面');
@@ -770,51 +837,87 @@
             }
             log('已点击雇佣护道');
             await sleep(800);
+            if (!window.__monitorRunning) { hiring = false; return; }
             const loaded = await waitForProtectorList(8000);
+            if (!window.__monitorRunning) { hiring = false; return; }
             if (loaded === 'empty') {
                 dismissModal();
                 await sleep(800);
-                if (config.protectors.onNoProtector === 'fight') {
-                    // 检查妖兽攻击力是否超过阈值
-                    const threshold = config.protectors.fightAttackThreshold;
-                    if (threshold > 0) {
-                        const fightOverlay = document.getElementById('encounterOverlay');
-                        if (fightOverlay) {
-                            const metaText = fightOverlay.textContent;
-                            const atkMatch = metaText.match(/攻击\s*(\d+)/);
-                            if (atkMatch) {
-                                const enemyAttack = parseInt(atkMatch[1]);
-                                if (enemyAttack > threshold) {
-                                    log(`妖兽攻击${enemyAttack}超过阈值${threshold}，转为逃跑...`);
-                                    const escaped = await tryEscape();
-                                    if (escaped) {
-                                        log('逃跑成功！点击冥想修炼...');
-                                        const btns = document.querySelectorAll('button');
-                                        for (const btn of btns) {
-                                            if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
-                                                btn.click();
-                                                break;
-                                            }
+                if (!window.__monitorRunning) { hiring = false; return; }
+
+                // 根据配置决定：逃跑或迎战
+                if (config.protectors.onNoProtector === 'escape') {
+                    // 逃跑逻辑
+                    log('暂无空闲护道者，尝试逃跑...');
+                    const escaped = await tryEscape();
+                    if (!window.__monitorRunning) { hiring = false; return; }
+                    if (escaped) {
+                        log('逃跑成功！点击冥想修炼...');
+                        const btns = document.querySelectorAll('button');
+                        for (const btn of btns) {
+                            if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
+                                btn.click();
+                                break;
+                            }
+                        }
+                        log('已逃跑并进入冥想，脚本停止');
+                    } else {
+                        log('逃跑失败，脚本停止');
+                    }
+                    hiring = false;
+                    window.__monitorRunning = false;
+                    if (window.__monitorInterval) {
+                        clearInterval(window.__monitorInterval);
+                        window.__monitorInterval = null;
+                    }
+                    syncStopUI();
+                    return;
+                }
+
+                // onNoProtector === 'fight'
+                // 检查妖兽攻击力是否超过阈值
+                const threshold = config.protectors.fightAttackThreshold;
+                if (threshold > 0) {
+                    const fightOverlay = document.getElementById('encounterOverlay');
+                    if (fightOverlay) {
+                        const metaText = fightOverlay.textContent;
+                        const atkMatch = metaText.match(/攻击\s*(\d+)/);
+                        if (atkMatch) {
+                            const enemyAttack = parseInt(atkMatch[1]);
+                            if (enemyAttack > threshold) {
+                                log(`妖兽攻击${enemyAttack}超过阈值${threshold}，转为逃跑...`);
+                                if (!window.__monitorRunning) { hiring = false; return; }
+                                const escaped = await tryEscape();
+                                if (!window.__monitorRunning) { hiring = false; return; }
+                                if (escaped) {
+                                    log('逃跑成功！点击冥想修炼...');
+                                    const btns = document.querySelectorAll('button');
+                                    for (const btn of btns) {
+                                        if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
+                                            btn.click();
+                                            break;
                                         }
-                                        log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止');
-                                    } else {
-                                        log('逃跑失败，脚本停止');
                                     }
-                                    hiring = false;
-                                    window.__monitorRunning = false;
-                                    if (window.__monitorInterval) {
-                                        clearInterval(window.__monitorInterval);
-                                        window.__monitorInterval = null;
-                                    }
-                                    syncStopUI();
-                                    return;
+                                    log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止');
+                                } else {
+                                    log('逃跑失败，脚本停止');
                                 }
+                                hiring = false;
+                                window.__monitorRunning = false;
+                                if (window.__monitorInterval) {
+                                    clearInterval(window.__monitorInterval);
+                                    window.__monitorInterval = null;
+                                }
+                                syncStopUI();
+                                return;
                             }
                         }
                     }
                 }
+
                 log('暂无空闲护道者，选择迎战...');
                 // 在遭遇界面直接点击迎战按钮
+                if (!window.__monitorRunning) { hiring = false; return; }
                 const fightOverlay = document.getElementById('encounterOverlay');
                 if (fightOverlay) {
                     const btns = fightOverlay.querySelectorAll('button');
@@ -828,56 +931,18 @@
                 log('已点击迎战，等待战斗结束...');
                 const battleStart = Date.now();
                 while (Date.now() - battleStart < 60000) {
+                    if (!window.__monitorRunning) { hiring = false; return; }
                     const o = document.getElementById('encounterOverlay');
                     const overlayVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
                     if (!overlayVisible) break;
                     await sleep(800);
                 }
                 log('战斗结束');
+                if (!window.__monitorRunning) { hiring = false; return; }
                 await sleep(800);
                 dismissTipDialog();
                 await sleep(800);
-                toggleAutoCheckbox(true);
                 hiring = false;
-                return;
-            }
-
-            log('暂无空闲护道者，尝试逃跑...');
-            const escaped = await tryEscape();
-            if (escaped) {
-                log('逃跑成功！点击冥想修炼...');
-                const btns = document.querySelectorAll('button');
-                for (const btn of btns) {
-                    if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
-                        btn.click();
-                        break;
-                    }
-                }
-                const allEls = document.querySelectorAll('a, div, span');
-                for (const el of allEls) {
-                    if (el.offsetParent !== null && el.textContent.trim() === '冥想修炼') {
-                        el.click();
-                        break;
-                    }
-                }
-                log('已点击冥想修炼，脚本停止');
-                hiring = false;
-                window.__monitorRunning = false;
-                if (window.__monitorInterval) {
-                    clearInterval(window.__monitorInterval);
-                    window.__monitorInterval = null;
-                }
-                syncStopUI();
-                return;
-            } else {
-                log('逃跑失败，脚本停止');
-                hiring = false;
-                window.__monitorRunning = false;
-                if (window.__monitorInterval) {
-                    clearInterval(window.__monitorInterval);
-                    window.__monitorInterval = null;
-                }
-                syncStopUI();
                 return;
             }
 
@@ -887,7 +952,9 @@
                 return;
             }
 
+            // loaded === 'loaded' - 执行雇佣逻辑
             const hired = await findAndHireProtector(1);
+            if (!window.__monitorRunning) { hiring = false; return; }
             if (!hired) {
                 log('雇佣失败，无合适人选');
                 hiring = false;
@@ -898,12 +965,14 @@
             log('等待战斗结束...');
             const battleStart = Date.now();
             while (Date.now() - battleStart < 60000) {
+                if (!window.__monitorRunning) { hiring = false; return; }
                 const o = document.getElementById('encounterOverlay');
                 const overlayVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
                 if (!overlayVisible) break;
                 if (Date.now() - battleStart > 10000) {
                     log('战斗超时10秒，重新雇佣...');
                     hiring = false;
+                    if (!window.__monitorRunning) return;
                     await sleep(800);
                     await hireProtector();
                     return;
@@ -911,18 +980,16 @@
                 await sleep(800);
             }
             log('战斗结束');
+            if (!window.__monitorRunning) { hiring = false; return; }
 
             // Dismiss tip dialog
             await sleep(800);
+            if (!window.__monitorRunning) { hiring = false; return; }
             const tipDismissed = dismissTipDialog();
             if (tipDismissed) log('已关闭打赏弹窗');
 
             // Wait before next action
             await sleep(800);
-
-            // Re-check auto toggle
-            toggleAutoCheckbox(true);
-            log('已重新勾选自动');
         } catch (e) {
             log('错误: ' + e.message);
         }
@@ -988,9 +1055,6 @@
         if (closeBtn) closeBtn.click();
         await sleep(300);
 
-        // 勾选自动
-        log('重新勾选自动...');
-        toggleAutoCheckbox(true);
         log('死亡后流程完成，继续监控...');
     }
 
