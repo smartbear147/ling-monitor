@@ -17,11 +17,11 @@
     const DEFAULT_CONFIG = {
         protectors: {
             priorities: [
-                { nameMatch: '魔君本相', sortBy: 'attack', sortOrder: 'desc' },
+                { nameMatch: '阿道夫', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '渡劫期三劫仙人', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '渡劫期二劫仙人', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '渡劫期一劫仙人', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '大乘期大圆满', excludeName: '魔君本相', sortBy: 'attack', sortOrder: 'desc' },
+                { realmMatch: '大乘期大圆满',  sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '大乘期后期', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '大乘期中期', sortBy: 'attack', sortOrder: 'desc' },
             ],
@@ -29,11 +29,13 @@
             retryDelayMs: 800,
             onNoProtector: 'escape', // 'escape' = 逃跑, 'fight' = 迎战
             fightAttackThreshold: 0, // 迎战时妖兽攻击阈值，超过则逃跑，0=不限制
+            afterEscape: 'stop', // 'stop' = 冥想并停止脚本, 'continue' = 继续监控
         },
         merchant: {
             highPriceThreshold: 7500000,
             stonePriority: ['传说', '史诗', '稀有', '优良', '普通'],
-            stoneKeywords: ['洗炼石', '洗练石'],
+            stoneKeywords: ['洗炼石'],
+            scrollKeywords: ['空白卷轴'],
             fallbackToExpensive: true,
         },
     };
@@ -310,6 +312,13 @@
                 <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}" style="width:120px;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
             </div>
             <div style="margin-bottom:10px;">
+                <label style="color:#4ecca3;">逃跑后行为</label><br>
+                <select id="cfg-afterEscape" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                    <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
+                    <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
+                </select>
+            </div>
+            <div style="margin-bottom:10px;">
                 <label style="color:#4ecca3;">高价阈值(灵石)</label><br>
                 <input id="cfg-highPrice" type="number" value="${cfg.merchant.highPriceThreshold}" style="width:120px;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
             </div>
@@ -320,6 +329,10 @@
             <div style="margin-bottom:10px;">
                 <label style="color:#4ecca3;">洗炼石关键词(逗号分隔)</label><br>
                 <input id="cfg-stoneKeywords" type="text" value="${cfg.merchant.stoneKeywords.join(',')}" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+            </div>
+            <div style="margin-bottom:10px;">
+                <label style="color:#4ecca3;">空白卷轴关键词(逗号分隔)</label><br>
+                <input id="cfg-scrollKeywords" type="text" value="${cfg.merchant.scrollKeywords ? cfg.merchant.scrollKeywords.join(',') : '空白卷轴'}" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
             </div>
             <div style="margin-bottom:10px;">
                 <label style="color:#4ecca3;">无洗炼石时买最贵的</label>
@@ -349,9 +362,11 @@
                 config.protectors.retryDelayMs = parseInt(document.getElementById('cfg-retryDelay').value) || 800;
                 config.protectors.onNoProtector = document.getElementById('cfg-onNoProtector').value;
                 config.protectors.fightAttackThreshold = parseInt(document.getElementById('cfg-fightThreshold').value) || 0;
+                config.protectors.afterEscape = document.getElementById('cfg-afterEscape').value;
                 config.merchant.highPriceThreshold = parseInt(document.getElementById('cfg-highPrice').value) || 7500000;
                 config.merchant.stonePriority = document.getElementById('cfg-stonePriority').value.split(',').map(s => s.trim()).filter(Boolean);
                 config.merchant.stoneKeywords = document.getElementById('cfg-stoneKeywords').value.split(',').map(s => s.trim()).filter(Boolean);
+                config.merchant.scrollKeywords = document.getElementById('cfg-scrollKeywords').value.split(',').map(s => s.trim()).filter(Boolean);
                 config.merchant.fallbackToExpensive = document.getElementById('cfg-fallback').checked;
                 const prioritiesText = document.getElementById('cfg-priorities').value.trim();
                 const priorities = JSON.parse(prioritiesText);
@@ -396,6 +411,8 @@
 
     // --- 等待护道者列表加载 ---
     async function waitForProtectorList(timeout = 8000) {
+        // Wait before first check to allow list to load
+        await sleep(800);
         const start = Date.now();
         while (Date.now() - start < timeout) {
             const count = document.querySelectorAll('.protector-card').length;
@@ -529,6 +546,7 @@
                     const text = btn.textContent.trim();
                     if (text.includes('协同') || text.includes('协 同')) {
                         btn.click();
+                        log(' 已点击协同');
                         break;
                     }
                 }
@@ -536,17 +554,7 @@
             await sleep(800);
             if (!window.__monitorRunning) return false;
 
-            // Click confirm
-            const confirmed = await clickConfirm();
-            if (!confirmed) {
-                if (window.__origFetchHire) window.fetch = window.__origFetchHire;
-                log(' 未找到确认按钮');
-                continue;
-            }
-            await sleep(800);
-            if (!window.__monitorRunning) return false;
-
-            // Check hire response
+            // Check hire response (no confirm button needed, 协同 directly hires)
             const resp = window.__hireResponse;
             if (window.__origFetchHire) window.fetch = window.__origFetchHire;
             window.__hireResponse = null;
@@ -651,18 +659,22 @@
     }
 
     // --- 关闭打赏弹窗 ---
-    function dismissTipDialog() {
-        const modal = document.getElementById('gameDialogModal');
-        if (!modal) return false;
-        if (getComputedStyle(modal).display === 'none') return false;
-        if (!modal.textContent.includes('打赏')) return false;
-        const btns = modal.querySelectorAll('button');
-        for (const btn of btns) {
-            const t = btn.textContent.trim();
-            if (t === '取 消' || t === '取消') {
-                btn.click();
-                return true;
+    async function dismissTipDialog(timeout = 3000) {
+        const start = Date.now();
+        while (Date.now() - start < timeout) {
+            if (!window.__monitorRunning) return false;  // 脚本停止时立即退出
+            const modal = document.getElementById('gameDialogModal');
+            if (modal && getComputedStyle(modal).display !== 'none' && modal.textContent.includes('打赏')) {
+                const btns = modal.querySelectorAll('button');
+                for (const btn of btns) {
+                    const t = btn.textContent.trim();
+                    if (t === '取 消' || t === '取消') {
+                        btn.click();
+                        return true;
+                    }
+                }
             }
+            await sleep(300);
         }
         return false;
     }
@@ -712,7 +724,18 @@
                     }
                 }
             }
-            // 优先级3: 买最贵的
+            // 优先级3: 空白卷轴（按稀有度降序）
+            if (!bought) {
+                for (const quality of mcfg.stonePriority) {
+                    const scroll = allItems.find(i => i.name.includes(quality) && mcfg.scrollKeywords.some(kw => i.name.includes(kw)));
+                    if (scroll) {
+                        clickBuyItem(scroll.name);
+                        bought = { ...scroll, reason: '空白卷轴' };
+                        break;
+                    }
+                }
+            }
+            // 优先级4: 买最贵的
             if (!bought && mcfg.fallbackToExpensive && allItems.length > 0) {
                 const sorted = [...allItems].sort((a, b) => b.price - a.price);
                 clickBuyItem(sorted[0].name);
@@ -732,8 +755,6 @@
             if (!window.__monitorRunning) { shopping = false; return; }
             const leaveBtn = document.getElementById('merchantLeaveBtn');
             if (leaveBtn) leaveBtn.click();
-
-            log('云游商人已处理');
         } catch (e) {
             log('商人错误: ' + e.message);
         }
@@ -805,7 +826,7 @@
         if (!window.__monitorRunning) return; // 检查是否已停止
         hiring = true;
         const now = Date.now();
-        if (now - lastEncounterTime < 10000) {
+        if (now - lastEncounterTime < 3000) {  // 缩短到3秒，防止重复处理同一遭遇
             hiring = false;
             return;
         }
@@ -836,7 +857,6 @@
                 return;
             }
             log('已点击雇佣护道');
-            await sleep(800);
             if (!window.__monitorRunning) { hiring = false; return; }
             const loaded = await waitForProtectorList(8000);
             if (!window.__monitorRunning) { hiring = false; return; }
@@ -851,26 +871,34 @@
                     log('暂无空闲护道者，尝试逃跑...');
                     const escaped = await tryEscape();
                     if (!window.__monitorRunning) { hiring = false; return; }
-                    if (escaped) {
-                        log('逃跑成功！点击冥想修炼...');
-                        const btns = document.querySelectorAll('button');
-                        for (const btn of btns) {
-                            if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
-                                btn.click();
-                                break;
-                            }
-                        }
-                        log('已逃跑并进入冥想，脚本停止');
-                    } else {
-                        log('逃跑失败，脚本停止');
-                    }
                     hiring = false;
-                    window.__monitorRunning = false;
-                    if (window.__monitorInterval) {
-                        clearInterval(window.__monitorInterval);
-                        window.__monitorInterval = null;
+
+                    if (escaped) {
+                        if (config.protectors.afterEscape === 'stop') {
+                            // 点击冥想修炼并停止脚本
+                            log('逃跑成功！点击冥想修炼...');
+                            const btns = document.querySelectorAll('button');
+                            for (const btn of btns) {
+                                if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
+                                    btn.click();
+                                    break;
+                                }
+                            }
+                            log('已逃跑并进入冥想，脚本停止');
+                            window.__monitorRunning = false;
+                            if (window.__monitorInterval) {
+                                clearInterval(window.__monitorInterval);
+                                window.__monitorInterval = null;
+                            }
+                            syncStopUI();
+                        } else {
+                            // 继续监控
+                            log('逃跑成功！继续监控...');
+                        }
+                    } else {
+                        // 逃跑失败，继续监控等待下次遭遇
+                        log('逃跑失败，继续监控...');
                     }
-                    syncStopUI();
                     return;
                 }
 
@@ -889,26 +917,32 @@
                                 if (!window.__monitorRunning) { hiring = false; return; }
                                 const escaped = await tryEscape();
                                 if (!window.__monitorRunning) { hiring = false; return; }
-                                if (escaped) {
-                                    log('逃跑成功！点击冥想修炼...');
-                                    const btns = document.querySelectorAll('button');
-                                    for (const btn of btns) {
-                                        if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
-                                            btn.click();
-                                            break;
-                                        }
-                                    }
-                                    log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止');
-                                } else {
-                                    log('逃跑失败，脚本停止');
-                                }
                                 hiring = false;
-                                window.__monitorRunning = false;
-                                if (window.__monitorInterval) {
-                                    clearInterval(window.__monitorInterval);
-                                    window.__monitorInterval = null;
+
+                                if (escaped) {
+                                    if (config.protectors.afterEscape === 'stop') {
+                                        log('逃跑成功！点击冥想修炼...');
+                                        const btns = document.querySelectorAll('button');
+                                        for (const btn of btns) {
+                                            if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
+                                                btn.click();
+                                                break;
+                                            }
+                                        }
+                                        log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止');
+                                        window.__monitorRunning = false;
+                                        if (window.__monitorInterval) {
+                                            clearInterval(window.__monitorInterval);
+                                            window.__monitorInterval = null;
+                                        }
+                                        syncStopUI();
+                                    } else {
+                                        log('逃跑成功！继续监控...');
+                                    }
+                                } else {
+                                    // 逃跑失败，继续监控等待下次遭遇
+                                    log('逃跑失败，继续监控...');
                                 }
-                                syncStopUI();
                                 return;
                             }
                         }
@@ -938,11 +972,10 @@
                     await sleep(800);
                 }
                 log('战斗结束');
-                if (!window.__monitorRunning) { hiring = false; return; }
-                await sleep(800);
-                dismissTipDialog();
-                await sleep(800);
-                hiring = false;
+                hiring = false;  // 立即释放
+                if (!window.__monitorRunning) return;
+                const tipDismissed = await dismissTipDialog(2000);
+                if (tipDismissed) log('已关闭打赏弹窗');
                 return;
             }
 
@@ -980,21 +1013,18 @@
                 await sleep(800);
             }
             log('战斗结束');
-            if (!window.__monitorRunning) { hiring = false; return; }
+            hiring = false;  // 立即释放，允许检测新遭遇
+            if (!window.__monitorRunning) return;
 
             // Dismiss tip dialog
-            await sleep(800);
-            if (!window.__monitorRunning) { hiring = false; return; }
-            const tipDismissed = dismissTipDialog();
+            if (!window.__monitorRunning) return;
+            const tipDismissed = await dismissTipDialog(2000);
             if (tipDismissed) log('已关闭打赏弹窗');
 
-            // Wait before next action
-            await sleep(800);
         } catch (e) {
             log('错误: ' + e.message);
+            hiring = false;
         }
-        await sleep(3000);
-        hiring = false;
     }
 
     // --- 死亡复活流程 ---
@@ -1090,7 +1120,7 @@
             } catch (e) {
                 /* ignore */
             }
-        }, 2000);
+        }, 500);
     }
 
     // --- 初始化 ---
