@@ -43,12 +43,15 @@
     // --- 配置读写 ---
     function loadConfig() {
         const saved = GM_getValue('ling_config', null);
+        const defaults = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
         if (saved) {
             try {
-                return typeof saved === 'string' ? JSON.parse(saved) : saved;
+                const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
+                // 合并默认配置，确保缺失字段有默认值
+                return { ...defaults, ...parsed, merchant: { ...defaults.merchant, ...(parsed.merchant || {}) } };
             } catch (e) { /* fallback */ }
         }
-        return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+        return defaults;
     }
 
     function saveConfig(cfg) {
