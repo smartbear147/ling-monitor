@@ -7,6 +7,7 @@
 // @grant GM_getValue
 // @grant GM_setValue
 // @grant GM_addStyle
+// @grant unsafeWindow
 // @run-at document-idle
 // ==/UserScript==
 
@@ -15,104 +16,246 @@
 
     // --- 主题样式 ---
     GM_addStyle(`
-        #monitor-panel {
-            position: fixed; top: 10px; right: 10px; width: 300px;
-            max-width: calc(100vw - 20px);
-            background: var(--bg-panel, #16213e);
-            border: 1px solid var(--border-gold, #4ecca3);
-            border-radius: 10px; z-index: 99999;
-            font-family: monospace; font-size: 12px;
-            color: var(--text-primary, #eee);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        /* === 主题变量 (跟随页面亮暗模式) === */
+        html.theme-dark #monitor-panel,
+        html:not(.theme-light) #monitor-panel {
+            --mp-bg: #0e1525;
+            --mp-bg-section: #151d2e;
+            --mp-bg-deep: #111827;
+            --mp-text: #e8e0d0;
+            --mp-text-bright: #f0ece4;
+            --mp-text-secondary: #a8a090;
+            --mp-text-muted: #6a6560;
+            --mp-accent: #c9993a;
+            --mp-accent-dim: rgba(201,153,58,0.2);
+            --mp-accent-glow: rgba(201,153,58,0.08);
+            --mp-accent-subtle: rgba(201,153,58,0.05);
+            --mp-red: #EF4444;
+            --mp-red-subtle: rgba(239,68,68,0.15);
+            --mp-blue: #3B82F6;
+            --mp-gray: #6a6560;
+            --mp-border: rgba(201,153,58,0.1);
+            --mp-border-strong: rgba(201,153,58,0.2);
+            --mp-hover: rgba(201,153,58,0.08);
+            --mp-input-bg: #0e1525;
+            --mp-input-border: rgba(201,153,58,0.15);
+            --mp-scrollbar: #1a2540;
+            --mp-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--mp-accent-glow);
+            --mp-header-grad: linear-gradient(135deg, #111827 0%, #0a0f1c 100%);
         }
+        html.theme-light #monitor-panel {
+            --mp-bg: #f0efed;
+            --mp-bg-section: #eeedeb;
+            --mp-bg-deep: #eeedeb;
+            --mp-text: #1a1a1a;
+            --mp-text-bright: #1a1a1a;
+            --mp-text-secondary: #4a5a5a;
+            --mp-text-muted: #8a9090;
+            --mp-accent: #16A34A;
+            --mp-accent-dim: rgba(22,163,74,0.3);
+            --mp-accent-glow: rgba(22,163,74,0.08);
+            --mp-accent-subtle: rgba(22,163,74,0.05);
+            --mp-red: #DC2626;
+            --mp-red-subtle: rgba(220,38,38,0.12);
+            --mp-blue: #2563EB;
+            --mp-gray: #8a9090;
+            --mp-border: rgba(60,60,60,0.12);
+            --mp-border-strong: rgba(60,60,60,0.2);
+            --mp-hover: rgba(60,60,60,0.05);
+            --mp-input-bg: #eeedeb;
+            --mp-input-border: rgba(60,60,60,0.2);
+            --mp-scrollbar: rgba(60,60,60,0.2);
+            --mp-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05);
+            --mp-header-grad: linear-gradient(135deg, #eae9e7 0%, #f3f2f0 100%);
+        }
+
+        /* === 面板整体 === */
+        #monitor-panel {
+            position: fixed; top: 10px; right: 10px; width: 320px;
+            max-width: calc(100vw - 20px);
+            background: var(--mp-bg);
+            border: 1px solid var(--mp-accent-dim);
+            border-radius: 12px; z-index: 99999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif;
+            font-size: 12px; font-weight: 500;
+            color: var(--mp-text);
+            box-shadow: var(--mp-shadow);
+            overflow: hidden;
+            transition: width 0.2s ease;
+        }
+        #monitor-panel.minimized #monitor-body { display: none; }
+        #monitor-panel.minimized { width: auto; min-width: 180px; }
+
+        /* === 头部 === */
         #monitor-header {
-            cursor: move; padding: 6px 10px;
-            background: var(--bg-secondary, #1a1a2e);
+            cursor: move; padding: 10px 14px;
+            background: var(--mp-header-grad);
             display: flex; justify-content: space-between; align-items: center;
-            border-radius: 10px;
+            border-bottom: 1px solid var(--mp-border);
+            user-select: none;
         }
         #monitor-header > span:first-child {
-            font-weight: bold; color: var(--text-gold, #e0c097);
+            font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 0.5px;
         }
-        #monitor-status { font-size: 12px; }
-        #monitor-status.status-stopped { color: var(--text-red, #e74c3c); }
-        #monitor-status.status-running { color: var(--accent-jade, #4ecca3); }
-        #monitor-minimize { cursor: pointer; font-size: 16px; color: var(--text-muted, #aaa); }
+        #monitor-status { font-size: 11px; font-weight: 500; letter-spacing: 0.3px; }
+        #monitor-status.status-stopped { color: var(--mp-red); }
+        #monitor-status.status-running { color: var(--mp-accent); }
+        #monitor-minimize {
+            cursor: pointer; font-size: 14px; color: var(--mp-text-secondary);
+            width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+            border-radius: 6px; transition: background 0.15s, color 0.15s;
+        }
+        #monitor-minimize:hover { background: var(--mp-hover); color: var(--mp-text); }
+
+        /* === 日志区域 === */
         #monitor-log {
-            padding: 8px 10px; max-height: 200px; overflow-y: auto;
+            padding: 8px 12px; max-height: 200px; overflow-y: auto;
+            background: var(--mp-bg-deep);
+            scrollbar-width: thin; scrollbar-color: var(--mp-scrollbar) transparent;
         }
+        #monitor-log::-webkit-scrollbar { width: 4px; }
+        #monitor-log::-webkit-scrollbar-track { background: transparent; }
+        #monitor-log::-webkit-scrollbar-thumb { background: var(--mp-scrollbar); border-radius: 2px; }
         #monitor-log > div {
-            padding: 2px 0; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); word-break: break-all;
+            padding: 3px 0; border-bottom: 1px solid var(--mp-border);
+            word-break: break-all; color: var(--mp-text-secondary); font-size: 11px; line-height: 1.5;
         }
+        #monitor-log > div:last-child { border-bottom: none; }
+
+        /* === 底部按钮栏 === */
         #monitor-body > div:last-child {
-            padding: 6px 10px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.1));
-            display: flex; gap: 8px;
+            padding: 8px 12px; border-top: 1px solid var(--mp-border);
+            display: flex; gap: 6px; background: var(--mp-bg);
         }
         #monitor-toggle, #monitor-config, #monitor-clear {
-            flex: 1; padding: 5px; color: #fff; border: none; border-radius: 10px;
-            cursor: pointer; font-size: 12px;
+            flex: 1; padding: 7px 4px; color: #fff; border: none; border-radius: 8px;
+            cursor: pointer; font-size: 11px; font-weight: 500;
+            transition: filter 0.15s, transform 0.1s;
+            font-family: inherit;
         }
-        #monitor-toggle.btn-start { background: var(--accent-jade, #27ae60); }
-        #monitor-toggle.btn-stop  { background: var(--accent-crimson, #e74c3c); }
-        #monitor-config { background: var(--accent-blue, #2980b9); }
-        #monitor-clear  { background: var(--text-muted, #555); }
+        #monitor-toggle:active, #monitor-config:active, #monitor-clear:active {
+            transform: scale(0.97);
+        }
+        #monitor-toggle.btn-start { background: var(--mp-accent); }
+        #monitor-toggle.btn-start:hover { filter: brightness(1.15); }
+        #monitor-toggle.btn-stop  { background: var(--mp-red); }
+        #monitor-toggle.btn-stop:hover { filter: brightness(1.15); }
+        #monitor-config { background: var(--mp-blue); }
+        #monitor-config:hover { filter: brightness(1.15); }
+        #monitor-clear  { background: var(--mp-gray); }
+        #monitor-clear:hover { filter: brightness(1.2); }
 
+        /* === 配置面板 === */
         #config-panel {
             width: 100%; max-height: 50vh; overflow-y: auto;
-            background: var(--bg-panel, #16213e);
-            border-top: 1px solid var(--border-gold, #4ecca3);
-            font-family: monospace; font-size: 12px;
-            color: var(--text-primary, #eee);
-            padding: 12px; box-sizing: border-box;
+            background: var(--mp-bg);
+            border-top: 1px solid var(--mp-border);
+            font-family: inherit; font-size: 12px;
+            color: var(--mp-text);
+            padding: 12px; padding-bottom: 64px; box-sizing: border-box;
+            position: relative;
+            scrollbar-width: thin; scrollbar-color: var(--mp-scrollbar) transparent;
         }
-        #config-panel label { color: var(--accent-jade, #4ecca3); }
-        #config-panel .cfg-title { font-weight: bold; color: var(--text-gold, #e0c097); font-size: 14px; }
+        #config-panel::-webkit-scrollbar { width: 4px; }
+        #config-panel::-webkit-scrollbar-thumb { background: var(--mp-scrollbar); border-radius: 2px; }
+        #config-panel .cfg-bottom-bar {
+            position: sticky; bottom: -12px; left: 0; right: 0;
+            background: transparent;
+            padding: 12px 0 0; border-top: none;
+            display: flex; gap: 8px;
+        }
+        #config-panel label { color: var(--mp-accent); font-weight: 500; font-size: 11px; }
+        #config-panel .cfg-title { font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 0.3px; }
+        #config-panel .cfg-section {
+            margin-bottom: 14px; padding: 10px 12px;
+            background: var(--mp-bg-section); border-radius: 8px;
+            border: 1px solid var(--mp-border);
+        }
+        #config-panel .cfg-section-label {
+            font-size: 10px; font-weight: 600; color: var(--mp-text-muted);
+            text-transform: uppercase; letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
         #config-panel input[type=number],
         #config-panel input[type=text],
         #config-panel select,
         #config-panel textarea {
-            background: var(--bg-card, #1a1a2e); color: var(--text-primary, #eee);
-            border: 1px solid var(--border-color, #444); padding: 3px; border-radius: 3px;
+            background: var(--mp-input-bg); color: var(--mp-text);
+            border: 1px solid var(--mp-input-border); padding: 5px 8px; border-radius: 6px;
+            font-family: inherit; font-size: 11px;
+            transition: border-color 0.15s;
+            width: 100%; box-sizing: border-box;
+        }
+        #config-panel input:focus, #config-panel select:focus {
+            outline: none; border-color: var(--mp-accent);
+            box-shadow: 0 0 0 2px var(--mp-accent-glow);
         }
         #config-panel textarea { font-family: monospace; font-size: 11px; }
+        #config-panel .cfg-row { margin-bottom: 10px; }
+        #config-panel .cfg-row label { display: block; margin-bottom: 4px; }
         #cfg-save {
-            flex: 1; padding: 6px; background: var(--accent-jade, #27ae60);
-            color: #fff; border: none; border-radius: 4px; cursor: pointer;
+            flex: 1; padding: 8px 0; background: var(--mp-accent);
+            color: #fff; border: none; border-radius: 8px; cursor: pointer;
+            font-weight: 600; font-family: inherit; font-size: 12px;
+            transition: filter 0.15s, transform 0.1s, box-shadow 0.15s;
+            box-shadow: 0 2px 8px var(--mp-accent-dim);
         }
+        #cfg-save:hover { filter: brightness(1.15); box-shadow: 0 4px 12px var(--mp-accent-dim); }
+        #cfg-save:active { transform: scale(0.97); }
         #cfg-reset {
-            flex: 1; padding: 6px; background: var(--accent-crimson, #e74c3c);
-            color: #fff; border: none; border-radius: 4px; cursor: pointer;
+            flex: 1; padding: 8px 0;
+            background: var(--mp-bg-section);
+            color: var(--mp-text-secondary);
+            border: 1px solid var(--mp-border-strong); border-radius: 8px;
+            cursor: pointer; font-weight: 500; font-family: inherit; font-size: 12px;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
         }
+        #cfg-reset:hover { background: var(--mp-bg-deep); color: var(--mp-text); border-color: var(--mp-text-muted); }
+        #cfg-reset:active { transform: scale(0.97); }
 
+        /* === 优先级列表 === */
         .priority-list { display: flex; flex-direction: column; gap: 4px; }
         .priority-row {
             display: flex; align-items: center; gap: 4px;
-            background: var(--bg-card, #1a1a2e); border: 1px solid var(--border-color, #444);
-            border-radius: 4px; padding: 4px 6px;
+            background: var(--mp-bg-deep); border: 1px solid var(--mp-border-strong);
+            border-radius: 6px; padding: 5px 8px;
+            transition: border-color 0.15s;
         }
+        .priority-row:hover { border-color: var(--mp-text-muted); }
         .priority-row.dragging { opacity: 0.4; }
-        .priority-row.drag-over { border-color: var(--accent-jade, #4ecca3); }
-        .priority-handle { cursor: grab; color: var(--text-muted, #888); font-size: 14px; user-select: none; }
-        .priority-type {
-            background: var(--bg-secondary, #111827); color: var(--text-primary, #eee);
-            border: 1px solid var(--border-color, #444); border-radius: 3px;
-            padding: 2px 4px; font-size: 11px;
+        .priority-row.drag-over { border-color: var(--mp-accent); background: var(--mp-accent-subtle); }
+        .priority-handle { cursor: grab; color: var(--mp-text-muted); font-size: 14px; user-select: none; }
+        #config-panel .priority-row .priority-type {
+            background: var(--mp-input-bg) !important; color: var(--mp-text);
+            border: 1px solid var(--mp-border-strong); border-radius: 5px;
+            padding: 3px 8px; font-size: 11px; font-family: inherit;
+            width: 56px !important; min-width: 56px !important; max-width: 56px !important;
+            height: 26px; box-sizing: border-box;
+            flex-shrink: 0; flex-grow: 0;
+            appearance: none; -webkit-appearance: none;
+            text-align: center; text-align-last: center;
         }
-        .priority-keyword {
-            flex: 1; min-width: 0; background: var(--bg-secondary, #111827);
-            color: var(--text-primary, #eee); border: 1px solid var(--border-color, #444);
-            border-radius: 3px; padding: 2px 6px; font-size: 11px;
+        #config-panel .priority-row .priority-keyword {
+            flex: 1; min-width: 0; background: var(--mp-input-bg) !important;
+            color: var(--mp-text); border: 1px solid var(--mp-border-strong);
+            border-radius: 5px; padding: 3px 8px; font-size: 11px; font-family: inherit;
+            height: 26px; box-sizing: border-box;
         }
+        .priority-keyword:focus { outline: none; border-color: var(--mp-accent); }
         .priority-del {
-            cursor: pointer; color: var(--accent-crimson, #e74c3c); font-size: 14px;
-            font-weight: bold; user-select: none; padding: 0 2px;
+            cursor: pointer; color: var(--mp-red); font-size: 14px;
+            font-weight: bold; user-select: none; padding: 0 4px;
+            width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+            border-radius: 4px; transition: background 0.15s;
         }
+        .priority-del:hover { background: var(--mp-red-subtle); }
         .priority-add {
-            cursor: pointer; color: var(--accent-jade, #4ecca3); font-size: 12px;
-            text-align: center; padding: 4px; border: 1px dashed var(--border-color, #444);
-            border-radius: 4px; margin-top: 4px;
+            cursor: pointer; color: var(--mp-accent); font-size: 11px; font-weight: 500;
+            text-align: center; padding: 6px; border: 1px dashed var(--mp-border-strong);
+            border-radius: 6px; margin-top: 4px;
+            transition: border-color 0.15s, background 0.15s;
         }
-        .priority-add:hover { border-color: var(--accent-jade, #4ecca3); }
+        .priority-add:hover { border-color: var(--mp-accent); background: var(--mp-accent-subtle); }
     `);
 
     // --- 默认配置 ---
@@ -123,12 +266,13 @@
                 { realmMatch: '渡劫期三劫仙人', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '渡劫期二劫仙人', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '渡劫期一劫仙人', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '大乘期大圆满',  sortBy: 'attack', sortOrder: 'desc' },
+                { realmMatch: '大乘期大圆满', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '大乘期后期', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '大乘期中期', sortBy: 'attack', sortOrder: 'desc' },
             ],
             maxRetries: 3,
             retryDelayMs: 800,
+            hireMode: 'together', // 'together' = 协同, 'solo' = 单独
             onNoProtector: 'escape', // 'escape' = 逃跑, 'fight' = 迎战
             fightAttackThreshold: 0, // 迎战时妖兽攻击阈值，超过则逃跑，0=不限制
             afterEscape: 'stop', // 'stop' = 冥想并停止脚本, 'continue' = 继续监控
@@ -174,11 +318,12 @@
         }
     }
 
-    // --- Toast 拦截 ---
+    // --- Toast 拦截 (用 unsafeWindow 绑定到页面真实 window) ---
+    const _uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
     window.__lastToast = '';
     window.__lastToastTime = 0;
-    const originalShowToast = window.showToast;
-    window.showToast = function (msg) {
+    const originalShowToast = _uw.showToast;
+    _uw.showToast = function (msg) {
         window.__lastToast = msg;
         window.__lastToastTime = Date.now();
         if (originalShowToast) originalShowToast.apply(this, arguments);
@@ -334,15 +479,38 @@
         window.__monitorRunning = false;
 
         // 启动/停止
-        document.getElementById('monitor-toggle').addEventListener('click', (e) => {
+        document.getElementById('monitor-toggle').addEventListener('click', async (e) => {
             window.__monitorRunning = !window.__monitorRunning;
             const btn = e.target;
             const status = document.getElementById('monitor-status');
             if (window.__monitorRunning) {
                 btn.textContent = '停止';
                 btn.className = 'btn-stop';
-                status.textContent = '运行中';
+                status.textContent = '收功中...';
                 status.className = 'status-running';
+                // 先收功，等冥想彻底停止后再启动自动探索
+                const stopBtn = document.querySelector('.btn-stop-meditate');
+                if (stopBtn) {
+                    log('正在收功...');
+                    stopBtn.click();
+                    // 轮询等待冥想完全停止（游戏可能自动重新冥想，需要反复收功）
+                    for (let i = 0; i < 20; i++) {
+                        await sleep(1500);
+                        if (!window.__monitorRunning) { syncStopUI(); return; }
+                        const medBtn = document.getElementById('meditateBtn');
+                        const isMeditating = medBtn && medBtn.classList.contains('meditating');
+                        if (!isMeditating) break;
+                        const sb = document.querySelector('.btn-stop-meditate');
+                        if (sb) {
+                            log('检测到重新冥想，再次收功...');
+                            sb.click();
+                        }
+                    }
+                    if (!window.__monitorRunning) { syncStopUI(); return; }
+                    log('收功完成，启动监控');
+                }
+                // 收功完毕后才开启自动探索和监控循环
+                status.textContent = '运行中';
                 toggleAutoCheckbox(true);
                 startMonitorLoop();
                 log('监控已启动');
@@ -390,58 +558,74 @@
         panel.id = 'config-panel';
         const cfg = JSON.parse(JSON.stringify(config));
         panel.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                 <span class="cfg-title">配置编辑</span>
-                <span id="config-close" style="cursor:pointer;color:var(--accent-crimson,#e74c3c);font-size:16px;font-weight:bold;">&times;</span>
+                <span id="config-close" style="cursor:pointer;color:var(--mp-red);font-size:16px;font-weight:bold;">&times;</span>
             </div>
-            <div style="margin-bottom:10px;">
-                <label>护道者最大重试次数</label><br>
-                <input id="cfg-maxRetries" type="number" value="${cfg.protectors.maxRetries}" style="width:60px;">
+
+            <div class="cfg-section">
+                <div class="cfg-section-label">护道者设置</div>
+                <div class="cfg-row">
+                    <label>雇佣模式</label>
+                    <select id="cfg-hireMode">
+                        <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
+                        <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
+                    </select>
+                </div>
+                <div class="cfg-row">
+                    <label>最大重试次数</label>
+                    <input id="cfg-maxRetries" type="number" value="${cfg.protectors.maxRetries}">
+                </div>
+                <div class="cfg-row">
+                    <label>重试延迟(ms)</label>
+                    <input id="cfg-retryDelay" type="number" value="${cfg.protectors.retryDelayMs}">
+                </div>
+                <div class="cfg-row">
+                    <label>无空闲护道者时</label>
+                    <select id="cfg-onNoProtector">
+                        <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
+                        <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
+                    </select>
+                </div>
+                <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
+                    <label>迎战妖兽攻击阈值(超过则逃跑，0=不限制)</label>
+                    <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
+                </div>
+                <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
+                    <label>逃跑后行为</label>
+                    <select id="cfg-afterEscape">
+                        <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
+                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
+                    </select>
+                </div>
             </div>
-            <div style="margin-bottom:10px;">
-                <label>重试延迟(ms)</label><br>
-                <input id="cfg-retryDelay" type="number" value="${cfg.protectors.retryDelayMs}" style="width:80px;">
+
+            <div class="cfg-section">
+                <div class="cfg-section-label">商人设置</div>
+                <div class="cfg-row">
+                    <label>高价阈值(灵石)</label>
+                    <input id="cfg-highPrice" type="number" value="${cfg.merchant.highPriceThreshold}">
+                </div>
+                <div class="cfg-row">
+                    <label>洗炼石品质优先级(逗号分隔)</label>
+                    <input id="cfg-stonePriority" type="text" value="${cfg.merchant.stonePriority.join(',')}">
+                </div>
+                <div class="cfg-row">
+                    <label>洗炼石关键词(逗号分隔)</label>
+                    <input id="cfg-stoneKeywords" type="text" value="${cfg.merchant.stoneKeywords.join(',')}">
+                </div>
+                <div class="cfg-row">
+                    <label>空白卷轴关键词(逗号分隔)</label>
+                    <input id="cfg-scrollKeywords" type="text" value="${cfg.merchant.scrollKeywords ? cfg.merchant.scrollKeywords.join(',') : '空白卷轴'}">
+                </div>
+                <div class="cfg-row" style="display:flex;align-items:center;gap:8px;">
+                    <input id="cfg-fallback" type="checkbox" ${cfg.merchant.fallbackToExpensive ? 'checked' : ''}>
+                    <label style="margin-bottom:0;">无洗炼石时买最贵的</label>
+                </div>
             </div>
-            <div style="margin-bottom:10px;">
-                <label>无空闲护道者时</label><br>
-                <select id="cfg-onNoProtector" style="width:100%;">
-                    <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
-                    <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
-                </select>
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>迎战妖兽攻击阈值(超过则逃跑，0=不限制)</label><br>
-                <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}" style="width:120px;">
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>逃跑后行为</label><br>
-                <select id="cfg-afterEscape" style="width:100%;">
-                    <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
-                    <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
-                </select>
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>高价阈值(灵石)</label><br>
-                <input id="cfg-highPrice" type="number" value="${cfg.merchant.highPriceThreshold}" style="width:120px;">
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>洗炼石品质优先级(逗号分隔)</label><br>
-                <input id="cfg-stonePriority" type="text" value="${cfg.merchant.stonePriority.join(',')}" style="width:100%;">
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>洗炼石关键词(逗号分隔)</label><br>
-                <input id="cfg-stoneKeywords" type="text" value="${cfg.merchant.stoneKeywords.join(',')}" style="width:100%;">
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>空白卷轴关键词(逗号分隔)</label><br>
-                <input id="cfg-scrollKeywords" type="text" value="${cfg.merchant.scrollKeywords ? cfg.merchant.scrollKeywords.join(',') : '空白卷轴'}" style="width:100%;">
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>无洗炼石时买最贵的</label>
-                <input id="cfg-fallback" type="checkbox" ${cfg.merchant.fallbackToExpensive ? 'checked' : ''} style="margin-left:8px;">
-            </div>
-            <div style="margin-bottom:10px;">
-                <label>护道者优先级（按顺序匹配，越靠前越优先）</label>
+
+            <div class="cfg-section">
+                <div class="cfg-section-label">护道者优先级（按顺序匹配，越靠前越优先）</div>
                 <div id="cfg-priority-list" class="priority-list">
                     ${cfg.protectors.priorities.map((r, i) => {
                         const isName = !!r.nameMatch;
@@ -459,7 +643,8 @@
                 </div>
                 <div class="priority-add" id="cfg-priority-add">+ 添加规则</div>
             </div>
-            <div style="display:flex;gap:8px;">
+
+            <div class="cfg-bottom-bar">
                 <button id="cfg-save">保存</button>
                 <button id="cfg-reset">重置默认</button>
             </div>
@@ -472,11 +657,18 @@
             configPanelEl = null;
         });
 
+        // 联动：无空闲护道者时 → 显示/隐藏关联配置
+        document.getElementById('cfg-onNoProtector').addEventListener('change', (e) => {
+            document.getElementById('cfg-fightThreshold-wrap').style.display = e.target.value === 'fight' ? '' : 'none';
+            document.getElementById('cfg-afterEscape-wrap').style.display = e.target.value === 'escape' ? '' : 'none';
+        });
+
         // 保存
         document.getElementById('cfg-save').addEventListener('click', () => {
             try {
                 config.protectors.maxRetries = parseInt(document.getElementById('cfg-maxRetries').value) || 3;
                 config.protectors.retryDelayMs = parseInt(document.getElementById('cfg-retryDelay').value) || 800;
+                config.protectors.hireMode = document.getElementById('cfg-hireMode').value;
                 config.protectors.onNoProtector = document.getElementById('cfg-onNoProtector').value;
                 config.protectors.fightAttackThreshold = parseInt(document.getElementById('cfg-fightThreshold').value) || 0;
                 config.protectors.afterEscape = document.getElementById('cfg-afterEscape').value;
@@ -711,16 +903,25 @@
                 return resp;
             };
 
-            // Click this candidate's "协同" button
+            // Click the hire button based on config (协同 or 单独)
             const items = document.querySelectorAll('.protector-card');
             if (items[candidate.index]) {
                 const btns = items[candidate.index].querySelectorAll('.prot-btn');
+                const wantSolo = config.protectors.hireMode === 'solo';
                 for (const btn of btns) {
                     const text = btn.textContent.trim();
-                    if (text.includes('协同') || text.includes('协 同')) {
-                        btn.click();
-                        log(' 已点击协同');
-                        break;
+                    if (wantSolo) {
+                        if (text.includes('单独') || text.includes('单 独')) {
+                            btn.click();
+                            log(' 已点击单独');
+                            break;
+                        }
+                    } else {
+                        if (text.includes('协同') || text.includes('协 同')) {
+                            btn.click();
+                            log(' 已点击协同');
+                            break;
+                        }
                     }
                 }
             }
@@ -835,7 +1036,7 @@
     async function dismissTipDialog(timeout = 3000) {
         const start = Date.now();
         while (Date.now() - start < timeout) {
-            if (!window.__monitorRunning) return false;  // 脚本停止时立即退出
+            if (!window.__monitorRunning) return false; // 脚本停止时立即退出
             const modal = document.getElementById('gameDialogModal');
             if (modal && getComputedStyle(modal).display !== 'none' && modal.textContent.includes('打赏')) {
                 const btns = modal.querySelectorAll('button');
@@ -999,7 +1200,7 @@
         if (!window.__monitorRunning) return; // 检查是否已停止
         hiring = true;
         const now = Date.now();
-        if (now - lastEncounterTime < 3000) {  // 缩短到3秒，防止重复处理同一遭遇
+        if (now - lastEncounterTime < 3000) { // 缩短到3秒，防止重复处理同一遭遇
             hiring = false;
             return;
         }
@@ -1145,7 +1346,7 @@
                     await sleep(800);
                 }
                 log('战斗结束');
-                hiring = false;  // 立即释放
+                hiring = false; // 立即释放
                 if (!window.__monitorRunning) return;
                 const tipDismissed = await dismissTipDialog(2000);
                 if (tipDismissed) log('已关闭打赏弹窗');
@@ -1186,7 +1387,7 @@
                 await sleep(800);
             }
             log('战斗结束');
-            hiring = false;  // 立即释放，允许检测新遭遇
+            hiring = false; // 立即释放，允许检测新遭遇
             if (!window.__monitorRunning) return;
 
             // Dismiss tip dialog
@@ -1262,6 +1463,7 @@
     }
 
     // --- 主监控循环 ---
+    let __lastHandledToast = ''; // 避免重复处理同一条toast
     function startMonitorLoop() {
         window.__monitorInterval = setInterval(async () => {
             try {
@@ -1289,6 +1491,32 @@
                         if (!shopping) await handleMerchant();
                         return;
                     }
+                }
+
+                // 检测神识不足 toast
+                const toast = window.__lastToast || '';
+                if (toast.includes('神识不足') && window.__lastToastTime !== __lastHandledToast) {
+                    __lastHandledToast = window.__lastToastTime;
+                    log('检测到神识不足，点击冥想修炼并停止脚本');
+                    // 停止游戏的自动探索
+                    if (window._autoExploreRunning) {
+                        window.stopAutoExplore('神识不足', false);
+                    }
+                    // 点击冥想修炼
+                    const medBtn = document.getElementById('meditateBtn');
+                    if (medBtn && !medBtn.classList.contains('meditating')) {
+                        medBtn.click();
+                    }
+                    toggleAutoCheckbox(false);
+                    // 停止监控脚本
+                    window.__monitorRunning = false;
+                    if (window.__monitorInterval) {
+                        clearInterval(window.__monitorInterval);
+                        window.__monitorInterval = null;
+                    }
+                    syncStopUI();
+                    log('神识不足，已自动冥想并停止脚本');
+                    return;
                 }
             } catch (e) {
                 /* ignore */
