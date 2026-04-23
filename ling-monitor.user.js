@@ -13,6 +13,108 @@
 (function () {
     'use strict';
 
+    // --- 主题样式 ---
+    GM_addStyle(`
+        #monitor-panel {
+            position: fixed; top: 10px; right: 10px; width: 300px;
+            max-width: calc(100vw - 20px);
+            background: var(--bg-panel, #16213e);
+            border: 1px solid var(--border-gold, #4ecca3);
+            border-radius: 10px; z-index: 99999;
+            font-family: monospace; font-size: 12px;
+            color: var(--text-primary, #eee);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        #monitor-header {
+            cursor: move; padding: 6px 10px;
+            background: var(--bg-secondary, #1a1a2e);
+            display: flex; justify-content: space-between; align-items: center;
+            border-radius: 10px;
+        }
+        #monitor-header > span:first-child {
+            font-weight: bold; color: var(--text-gold, #e0c097);
+        }
+        #monitor-status { font-size: 12px; }
+        #monitor-status.status-stopped { color: var(--text-red, #e74c3c); }
+        #monitor-status.status-running { color: var(--accent-jade, #4ecca3); }
+        #monitor-minimize { cursor: pointer; font-size: 16px; color: var(--text-muted, #aaa); }
+        #monitor-log {
+            padding: 8px 10px; max-height: 200px; overflow-y: auto;
+        }
+        #monitor-log > div {
+            padding: 2px 0; border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1)); word-break: break-all;
+        }
+        #monitor-body > div:last-child {
+            padding: 6px 10px; border-top: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            display: flex; gap: 8px;
+        }
+        #monitor-toggle, #monitor-config, #monitor-clear {
+            flex: 1; padding: 5px; color: #fff; border: none; border-radius: 10px;
+            cursor: pointer; font-size: 12px;
+        }
+        #monitor-toggle.btn-start { background: var(--accent-jade, #27ae60); }
+        #monitor-toggle.btn-stop  { background: var(--accent-crimson, #e74c3c); }
+        #monitor-config { background: var(--accent-blue, #2980b9); }
+        #monitor-clear  { background: var(--text-muted, #555); }
+
+        #config-panel {
+            width: 100%; max-height: 50vh; overflow-y: auto;
+            background: var(--bg-panel, #16213e);
+            border-top: 1px solid var(--border-gold, #4ecca3);
+            font-family: monospace; font-size: 12px;
+            color: var(--text-primary, #eee);
+            padding: 12px; box-sizing: border-box;
+        }
+        #config-panel label { color: var(--accent-jade, #4ecca3); }
+        #config-panel .cfg-title { font-weight: bold; color: var(--text-gold, #e0c097); font-size: 14px; }
+        #config-panel input[type=number],
+        #config-panel input[type=text],
+        #config-panel select,
+        #config-panel textarea {
+            background: var(--bg-card, #1a1a2e); color: var(--text-primary, #eee);
+            border: 1px solid var(--border-color, #444); padding: 3px; border-radius: 3px;
+        }
+        #config-panel textarea { font-family: monospace; font-size: 11px; }
+        #cfg-save {
+            flex: 1; padding: 6px; background: var(--accent-jade, #27ae60);
+            color: #fff; border: none; border-radius: 4px; cursor: pointer;
+        }
+        #cfg-reset {
+            flex: 1; padding: 6px; background: var(--accent-crimson, #e74c3c);
+            color: #fff; border: none; border-radius: 4px; cursor: pointer;
+        }
+
+        .priority-list { display: flex; flex-direction: column; gap: 4px; }
+        .priority-row {
+            display: flex; align-items: center; gap: 4px;
+            background: var(--bg-card, #1a1a2e); border: 1px solid var(--border-color, #444);
+            border-radius: 4px; padding: 4px 6px;
+        }
+        .priority-row.dragging { opacity: 0.4; }
+        .priority-row.drag-over { border-color: var(--accent-jade, #4ecca3); }
+        .priority-handle { cursor: grab; color: var(--text-muted, #888); font-size: 14px; user-select: none; }
+        .priority-type {
+            background: var(--bg-secondary, #111827); color: var(--text-primary, #eee);
+            border: 1px solid var(--border-color, #444); border-radius: 3px;
+            padding: 2px 4px; font-size: 11px;
+        }
+        .priority-keyword {
+            flex: 1; min-width: 0; background: var(--bg-secondary, #111827);
+            color: var(--text-primary, #eee); border: 1px solid var(--border-color, #444);
+            border-radius: 3px; padding: 2px 6px; font-size: 11px;
+        }
+        .priority-del {
+            cursor: pointer; color: var(--accent-crimson, #e74c3c); font-size: 14px;
+            font-weight: bold; user-select: none; padding: 0 2px;
+        }
+        .priority-add {
+            cursor: pointer; color: var(--accent-jade, #4ecca3); font-size: 12px;
+            text-align: center; padding: 4px; border: 1px dashed var(--border-color, #444);
+            border-radius: 4px; margin-top: 4px;
+        }
+        .priority-add:hover { border-color: var(--accent-jade, #4ecca3); }
+    `);
+
     // --- 默认配置 ---
     const DEFAULT_CONFIG = {
         protectors: {
@@ -99,11 +201,11 @@
         const status = document.getElementById('monitor-status');
         if (btn) {
             btn.textContent = '启动';
-            btn.style.background = '#27ae60';
+            btn.className = 'btn-start';
         }
         if (status) {
             status.textContent = '已停止';
-            status.style.color = '#e74c3c';
+            status.className = 'status-stopped';
         }
     }
 
@@ -115,23 +217,22 @@
         const panel = document.createElement('div');
         panel.id = 'monitor-panel';
         panel.innerHTML = `
-            <div id="monitor-header" style="cursor:move;padding:6px 10px;background:#1a1a2e;display:flex;justify-content:space-between;align-items:center;border-radius:10px;">
-                <span style="font-weight:bold;color:#e0c097;">自动监控</span>
+            <div id="monitor-header">
+                <span>自动监控</span>
                 <span style="display:flex;align-items:center;gap:8px;">
-                    <span id="monitor-status" style="font-size:12px;color:#e74c3c;">已停止</span>
-                    <span id="monitor-minimize" style="cursor:pointer;font-size:16px;color:#aaa;" title="缩小">&#x25BC;</span>
+                    <span id="monitor-status" class="status-stopped">已停止</span>
+                    <span id="monitor-minimize" title="缩小">&#x25BC;</span>
                 </span>
             </div>
             <div id="monitor-body">
-                <div style="padding:8px 10px;max-height:200px;overflow-y:auto;" id="monitor-log"></div>
-                <div style="padding:6px 10px;border-top:1px solid #444;display:flex;gap:8px;">
-                    <button id="monitor-toggle" style="flex:1;padding:5px;background:#27ae60;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:12px;">启动</button>
-                    <button id="monitor-config" style="flex:1;padding:5px;background:#2980b9;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:12px;">配置</button>
-                    <button id="monitor-clear" style="flex:1;padding:5px;background:#555;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:12px;">清日志</button>
+                <div id="monitor-log"></div>
+                <div>
+                    <button id="monitor-toggle" class="btn-start">启动</button>
+                    <button id="monitor-config">配置</button>
+                    <button id="monitor-clear">清日志</button>
                 </div>
             </div>
         `;
-        panel.style.cssText = 'position:fixed;top:10px;right:10px;width:300px;max-width:calc(100vw - 20px);background:#16213e;border:1px solid #4ecca3;border-radius:10px;z-index:99999;font-family:monospace;font-size:12px;color:#eee;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
         panel.onclick = function (e) { e.stopPropagation(); };
         document.body.appendChild(panel);
 
@@ -224,7 +325,6 @@
             const logEl = document.getElementById('monitor-log');
             if (!logEl) return;
             const line = document.createElement('div');
-            line.style.cssText = 'padding:2px 0;border-bottom:1px solid #333;word-break:break-all;';
             line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
             logEl.appendChild(line);
             logEl.scrollTop = logEl.scrollHeight;
@@ -240,17 +340,17 @@
             const status = document.getElementById('monitor-status');
             if (window.__monitorRunning) {
                 btn.textContent = '停止';
-                btn.style.background = '#e74c3c';
+                btn.className = 'btn-stop';
                 status.textContent = '运行中';
-                status.style.color = '#4ecca3';
+                status.className = 'status-running';
                 toggleAutoCheckbox(true);
                 startMonitorLoop();
                 log('监控已启动');
             } else {
                 btn.textContent = '启动';
-                btn.style.background = '#27ae60';
+                btn.className = 'btn-start';
                 status.textContent = '已停止';
-                status.style.color = '#e74c3c';
+                status.className = 'status-stopped';
                 hiring = false;
                 shopping = false;
                 if (window.__monitorInterval) {
@@ -288,66 +388,80 @@
         }
         const panel = document.createElement('div');
         panel.id = 'config-panel';
-        panel.style.cssText = 'width:100%;max-height:50vh;overflow-y:auto;background:#16213e;border-top:1px solid #4ecca3;font-family:monospace;font-size:12px;color:#eee;padding:12px;box-sizing:border-box;';
         const cfg = JSON.parse(JSON.stringify(config));
         panel.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-weight:bold;color:#e0c097;font-size:14px;">配置编辑</span>
-                <span id="config-close" style="cursor:pointer;color:#e74c3c;font-size:16px;font-weight:bold;">&times;</span>
+                <span class="cfg-title">配置编辑</span>
+                <span id="config-close" style="cursor:pointer;color:var(--accent-crimson,#e74c3c);font-size:16px;font-weight:bold;">&times;</span>
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">护道者最大重试次数</label><br>
-                <input id="cfg-maxRetries" type="number" value="${cfg.protectors.maxRetries}" style="width:60px;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>护道者最大重试次数</label><br>
+                <input id="cfg-maxRetries" type="number" value="${cfg.protectors.maxRetries}" style="width:60px;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">重试延迟(ms)</label><br>
-                <input id="cfg-retryDelay" type="number" value="${cfg.protectors.retryDelayMs}" style="width:80px;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>重试延迟(ms)</label><br>
+                <input id="cfg-retryDelay" type="number" value="${cfg.protectors.retryDelayMs}" style="width:80px;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">无空闲护道者时</label><br>
-                <select id="cfg-onNoProtector" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>无空闲护道者时</label><br>
+                <select id="cfg-onNoProtector" style="width:100%;">
                     <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
                     <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
                 </select>
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">迎战妖兽攻击阈值(超过则逃跑，0=不限制)</label><br>
-                <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}" style="width:120px;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>迎战妖兽攻击阈值(超过则逃跑，0=不限制)</label><br>
+                <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}" style="width:120px;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">逃跑后行为</label><br>
-                <select id="cfg-afterEscape" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>逃跑后行为</label><br>
+                <select id="cfg-afterEscape" style="width:100%;">
                     <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
                     <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
                 </select>
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">高价阈值(灵石)</label><br>
-                <input id="cfg-highPrice" type="number" value="${cfg.merchant.highPriceThreshold}" style="width:120px;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>高价阈值(灵石)</label><br>
+                <input id="cfg-highPrice" type="number" value="${cfg.merchant.highPriceThreshold}" style="width:120px;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">洗炼石品质优先级(逗号分隔)</label><br>
-                <input id="cfg-stonePriority" type="text" value="${cfg.merchant.stonePriority.join(',')}" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>洗炼石品质优先级(逗号分隔)</label><br>
+                <input id="cfg-stonePriority" type="text" value="${cfg.merchant.stonePriority.join(',')}" style="width:100%;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">洗炼石关键词(逗号分隔)</label><br>
-                <input id="cfg-stoneKeywords" type="text" value="${cfg.merchant.stoneKeywords.join(',')}" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>洗炼石关键词(逗号分隔)</label><br>
+                <input id="cfg-stoneKeywords" type="text" value="${cfg.merchant.stoneKeywords.join(',')}" style="width:100%;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">空白卷轴关键词(逗号分隔)</label><br>
-                <input id="cfg-scrollKeywords" type="text" value="${cfg.merchant.scrollKeywords ? cfg.merchant.scrollKeywords.join(',') : '空白卷轴'}" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;">
+                <label>空白卷轴关键词(逗号分隔)</label><br>
+                <input id="cfg-scrollKeywords" type="text" value="${cfg.merchant.scrollKeywords ? cfg.merchant.scrollKeywords.join(',') : '空白卷轴'}" style="width:100%;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">无洗炼石时买最贵的</label>
+                <label>无洗炼石时买最贵的</label>
                 <input id="cfg-fallback" type="checkbox" ${cfg.merchant.fallbackToExpensive ? 'checked' : ''} style="margin-left:8px;">
             </div>
             <div style="margin-bottom:10px;">
-                <label style="color:#4ecca3;">护道者优先级 (JSON)</label><br>
-                <textarea id="cfg-priorities" rows="8" style="width:100%;background:#1a1a2e;color:#eee;border:1px solid #444;padding:3px;border-radius:3px;font-family:monospace;font-size:11px;">${JSON.stringify(cfg.protectors.priorities, null, 2)}</textarea>
+                <label>护道者优先级（按顺序匹配，越靠前越优先）</label>
+                <div id="cfg-priority-list" class="priority-list">
+                    ${cfg.protectors.priorities.map((r, i) => {
+                        const isName = !!r.nameMatch;
+                        const keyword = isName ? r.nameMatch : (r.realmMatch || r.realmContains || '');
+                        return `<div class="priority-row" draggable="true" data-idx="${i}">
+                            <span class="priority-handle" title="拖拽排序">⠿</span>
+                            <select class="priority-type">
+                                <option value="realm" ${!isName ? 'selected' : ''}>按境界</option>
+                                <option value="name" ${isName ? 'selected' : ''}>按名字</option>
+                            </select>
+                            <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
+                            <span class="priority-del" title="删除">&times;</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+                <div class="priority-add" id="cfg-priority-add">+ 添加规则</div>
             </div>
             <div style="display:flex;gap:8px;">
-                <button id="cfg-save" style="flex:1;padding:6px;background:#27ae60;color:#fff;border:none;border-radius:4px;cursor:pointer;">保存</button>
-                <button id="cfg-reset" style="flex:1;padding:6px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;">重置默认</button>
+                <button id="cfg-save">保存</button>
+                <button id="cfg-reset">重置默认</button>
             </div>
         `;
         const monitorPanel = document.getElementById('monitor-panel');
@@ -371,9 +485,16 @@
                 config.merchant.stoneKeywords = document.getElementById('cfg-stoneKeywords').value.split(',').map(s => s.trim()).filter(Boolean);
                 config.merchant.scrollKeywords = document.getElementById('cfg-scrollKeywords').value.split(',').map(s => s.trim()).filter(Boolean);
                 config.merchant.fallbackToExpensive = document.getElementById('cfg-fallback').checked;
-                const prioritiesText = document.getElementById('cfg-priorities').value.trim();
-                const priorities = JSON.parse(prioritiesText);
-                if (!Array.isArray(priorities)) throw new Error('优先级必须是数组');
+                const rows = document.querySelectorAll('#cfg-priority-list .priority-row');
+                const priorities = [];
+                rows.forEach(row => {
+                    const type = row.querySelector('.priority-type').value;
+                    const kw = row.querySelector('.priority-keyword').value.trim();
+                    if (!kw) return;
+                    const rule = { sortBy: 'attack', sortOrder: 'desc' };
+                    rule[type === 'name' ? 'nameMatch' : 'realmMatch'] = kw;
+                    priorities.push(rule);
+                });
                 config.protectors.priorities = priorities;
                 saveConfig(config);
                 log('配置已保存');
@@ -389,6 +510,55 @@
             panel.remove();
             configPanelEl = null;
             log('配置已重置为默认值');
+        });
+
+        // --- 优先级列表交互 ---
+        const list = document.getElementById('cfg-priority-list');
+
+        function makeRow(keyword, type) {
+            const row = document.createElement('div');
+            row.className = 'priority-row';
+            row.draggable = true;
+            row.innerHTML = `
+                <span class="priority-handle" title="拖拽排序">⠿</span>
+                <select class="priority-type">
+                    <option value="realm" ${type !== 'name' ? 'selected' : ''}>按境界</option>
+                    <option value="name" ${type === 'name' ? 'selected' : ''}>按名字</option>
+                </select>
+                <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
+                <span class="priority-del" title="删除">&times;</span>
+            `;
+            bindRowEvents(row);
+            return row;
+        }
+
+        function bindRowEvents(row) {
+            row.querySelector('.priority-del').addEventListener('click', () => row.remove());
+            row.addEventListener('dragstart', e => {
+                row.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            row.addEventListener('dragend', () => row.classList.remove('dragging'));
+            row.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const dragging = list.querySelector('.dragging');
+                if (dragging && dragging !== row) {
+                    const rect = row.getBoundingClientRect();
+                    const mid = rect.top + rect.height / 2;
+                    if (e.clientY < mid) {
+                        list.insertBefore(dragging, row);
+                    } else {
+                        list.insertBefore(dragging, row.nextSibling);
+                    }
+                }
+            });
+        }
+
+        list.querySelectorAll('.priority-row').forEach(bindRowEvents);
+
+        document.getElementById('cfg-priority-add').addEventListener('click', () => {
+            list.appendChild(makeRow('', 'realm'));
         });
     }
 
