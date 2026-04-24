@@ -152,14 +152,14 @@
             border-top: 1px solid var(--mp-border);
             font-family: inherit; font-size: 12px;
             color: var(--mp-text);
-            padding: 12px; padding-bottom: 64px; box-sizing: border-box;
+            padding: 12px; padding-bottom: 30px; box-sizing: border-box;
             position: relative;
             scrollbar-width: thin; scrollbar-color: var(--mp-scrollbar) transparent;
         }
         #config-panel::-webkit-scrollbar { width: 4px; }
         #config-panel::-webkit-scrollbar-thumb { background: var(--mp-scrollbar); border-radius: 2px; }
         #config-panel .cfg-bottom-bar {
-            position: sticky; bottom: -12px; left: 0; right: 0;
+            position: relative; bottom: 0px; left: 0; right: 0;
             background: transparent;
             padding: 12px 0 0; border-top: none;
             display: flex; gap: 8px;
