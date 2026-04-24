@@ -21,45 +21,54 @@
         /* === 主题变量 (跟随页面亮暗模式) === */
         html.theme-dark #monitor-panel,
         html:not(.theme-light) #monitor-panel {
-            --mp-bg: #0e1525;
-            --mp-bg-section: #151d2e;
-            --mp-bg-deep: #111827;
-            --mp-text: #e8e0d0;
+            --mp-bg: #0c1220;
+            --mp-bg-section: rgba(180,140,60,0.04);
+            --mp-bg-deep: rgba(0,0,0,0.15);
+            --mp-text: #e8dfc8;
             --mp-text-bright: #f0ece4;
-            --mp-text-secondary: #a8a090;
-            --mp-text-muted: #6a6560;
+            --mp-text-secondary: #a89878;
+            --mp-text-muted: #5a5548;
             --mp-accent: #c9993a;
-            --mp-accent-dim: rgba(201,153,58,0.2);
-            --mp-accent-glow: rgba(201,153,58,0.08);
+            --mp-accent-dim: rgba(201,153,58,0.25);
+            --mp-accent-glow: rgba(201,153,58,0.15);
             --mp-accent-subtle: rgba(201,153,58,0.05);
-            --mp-red: #EF4444;
-            --mp-red-subtle: rgba(239,68,68,0.15);
-            --mp-blue: #3B82F6;
-            --mp-gray: #6a6560;
-            --mp-border: rgba(201,153,58,0.1);
-            --mp-border-strong: rgba(201,153,58,0.2);
-            --mp-hover: rgba(201,153,58,0.08);
-            --mp-input-bg: #0e1525;
-            --mp-input-border: rgba(201,153,58,0.15);
-            --mp-scrollbar: #1a2540;
-            --mp-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--mp-accent-glow);
-            --mp-header-grad: linear-gradient(135deg, #111827 0%, #0a0f1c 100%);
+            --mp-red: #b85430;
+            --mp-red-subtle: rgba(184,84,48,0.15);
+            --mp-blue: #c9993a;
+            --mp-gray: #6b4423;
+            --mp-border: rgba(180,140,60,0.1);
+            --mp-border-strong: rgba(180,140,60,0.2);
+            --mp-hover: rgba(180,140,60,0.08);
+            --mp-input-bg: rgba(0,0,0,0.3);
+            --mp-input-border: rgba(180,140,60,0.15);
+            --mp-scrollbar: rgba(180,140,60,0.15);
+            --mp-shadow: 0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(180,140,60,0.1);
+            --mp-header-grad: linear-gradient(180deg, rgba(180,140,60,0.06) 0%, transparent 100%);
+            --mp-panel-grad: linear-gradient(180deg, #0c1220 0%, #0e1628 100%);
+            --mp-btn-primary-grad: linear-gradient(180deg, #c9993a 0%, #a07828 100%);
+            --mp-btn-stop-grad: linear-gradient(180deg, #8b3a2a 0%, #6a2820 100%);
+            --mp-gold-line: linear-gradient(90deg, transparent 0%, rgba(201,153,58,0.6) 50%, transparent 100%);
+            --mp-log-success: #7aad6a;
+            --mp-log-error: #d06050;
+            --mp-log-warn: #d4a854;
+            --mp-log-info: #7aa8b8;
+            --mp-log-action: #c9993a;
         }
         html.theme-light #monitor-panel {
             --mp-bg: #f0efed;
-            --mp-bg-section: #eeedeb;
-            --mp-bg-deep: #eeedeb;
+            --mp-bg-section: #f4f4f0;
+            --mp-bg-deep: #eae9e7;
             --mp-text: #1a1a1a;
             --mp-text-bright: #1a1a1a;
             --mp-text-secondary: #4a5a5a;
             --mp-text-muted: #8a9090;
-            --mp-accent: #16A34A;
-            --mp-accent-dim: rgba(22,163,74,0.3);
-            --mp-accent-glow: rgba(22,163,74,0.08);
-            --mp-accent-subtle: rgba(22,163,74,0.05);
-            --mp-red: #DC2626;
-            --mp-red-subtle: rgba(220,38,38,0.12);
-            --mp-blue: #2563EB;
+            --mp-accent: #3a6a7a;
+            --mp-accent-dim: rgba(58,106,122,0.2);
+            --mp-accent-glow: rgba(58,106,122,0.1);
+            --mp-accent-subtle: rgba(58,106,122,0.05);
+            --mp-red: #b8463e;
+            --mp-red-subtle: rgba(184,70,62,0.1);
+            --mp-blue: #60c0e0;
             --mp-gray: #8a9090;
             --mp-border: rgba(60,60,60,0.12);
             --mp-border-strong: rgba(60,60,60,0.2);
@@ -67,23 +76,40 @@
             --mp-input-bg: #eeedeb;
             --mp-input-border: rgba(60,60,60,0.2);
             --mp-scrollbar: rgba(60,60,60,0.2);
-            --mp-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.05);
-            --mp-header-grad: linear-gradient(135deg, #eae9e7 0%, #f3f2f0 100%);
+            --mp-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            --mp-header-grad: linear-gradient(180deg, #f4f4f0 0%, #f0efed 100%);
+            --mp-panel-grad: #f0efed;
+            --mp-btn-primary-grad: #5ec4a0;
+            --mp-btn-stop-grad: #b8463e;
+            --mp-gold-line: transparent;
+            --mp-log-success: #3a8a50;
+            --mp-log-error: #b8463e;
+            --mp-log-warn: #c08a30;
+            --mp-log-info: #3a6a7a;
+            --mp-log-action: #8a6a20;
         }
 
         /* === 面板整体 === */
         #monitor-panel {
             position: fixed; top: 10px; right: 10px; width: 320px;
             max-width: calc(100vw - 20px);
-            background: var(--mp-bg);
+            background: var(--mp-panel-grad, var(--mp-bg));
             border: 1px solid var(--mp-accent-dim);
-            border-radius: 12px; z-index: 99999;
+            border-radius: 6px; z-index: 99999;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif;
             font-size: 12px; font-weight: 500;
             color: var(--mp-text);
             box-shadow: var(--mp-shadow);
             overflow: hidden;
             transition: width 0.2s ease;
+        }
+        #monitor-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: var(--mp-gold-line);
+            z-index: 1;
         }
         #monitor-panel.minimized #monitor-body { display: none; }
         #monitor-panel.minimized { width: auto; min-width: 180px; }
@@ -97,17 +123,33 @@
             user-select: none;
         }
         #monitor-header > span:first-child {
-            font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 0.5px;
+            font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 1.5px;
         }
         #monitor-status { font-size: 11px; font-weight: 500; letter-spacing: 0.3px; }
         #monitor-status.status-stopped { color: var(--mp-red); }
         #monitor-status.status-running { color: var(--mp-accent); }
+        @keyframes mp-pulse-glow {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+        html.theme-dark #monitor-status.status-running,
+        html:not(.theme-light) #monitor-status.status-running {
+            animation: mp-pulse-glow 1.5s ease-in-out infinite;
+        }
         #monitor-minimize {
             cursor: pointer; font-size: 14px; color: var(--mp-text-secondary);
             width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
             border-radius: 6px; transition: background 0.15s, color 0.15s;
         }
         #monitor-minimize:hover { background: var(--mp-hover); color: var(--mp-text); }
+
+        /* === 日志颜色 === */
+        .log-time { color: var(--mp-text-muted); font-size: 10px; margin-right: 2px; }
+        #monitor-log > div.log-success { color: var(--mp-log-success); }
+        #monitor-log > div.log-error { color: var(--mp-log-error); }
+        #monitor-log > div.log-warn { color: var(--mp-log-warn); }
+        #monitor-log > div.log-info { color: var(--mp-log-info); }
+        #monitor-log > div.log-action { color: var(--mp-log-action); }
 
         /* === 日志区域 === */
         #monitor-log {
@@ -120,7 +162,8 @@
         #monitor-log::-webkit-scrollbar-thumb { background: var(--mp-scrollbar); border-radius: 2px; }
         #monitor-log > div {
             padding: 3px 0; border-bottom: 1px solid var(--mp-border);
-            word-break: break-all; color: var(--mp-text-secondary); font-size: 11px; line-height: 1.5;
+            word-break: break-all; color: var(--mp-text-secondary); font-size: 11px; line-height: 1.6;
+            font-family: 'Courier New', monospace;
         }
         #monitor-log > div:last-child { border-bottom: none; }
 
@@ -130,7 +173,7 @@
             display: flex; gap: 6px; background: var(--mp-bg);
         }
         #monitor-toggle, #monitor-config, #monitor-clear {
-            flex: 1; padding: 7px 4px; color: #fff; border: none; border-radius: 8px;
+            flex: 1; padding: 7px 4px; color: #fff; border: none; border-radius: 4px;
             cursor: pointer; font-size: 11px; font-weight: 500;
             transition: filter 0.15s, transform 0.1s;
             font-family: inherit;
@@ -138,14 +181,29 @@
         #monitor-toggle:active, #monitor-config:active, #monitor-clear:active {
             transform: scale(0.97);
         }
-        #monitor-toggle.btn-start { background: var(--mp-accent); }
-        #monitor-toggle.btn-start:hover { filter: brightness(1.15); }
-        #monitor-toggle.btn-stop  { background: var(--mp-red); }
+        #monitor-toggle.btn-start {
+            background: var(--mp-btn-primary-grad, var(--mp-accent));
+            box-shadow: 0 2px 8px var(--mp-accent-dim);
+            letter-spacing: 0.5px;
+        }
+        #monitor-toggle.btn-start:hover { filter: brightness(1.15); box-shadow: 0 2px 12px var(--mp-accent-dim); }
+        #monitor-toggle.btn-stop {
+            background: var(--mp-btn-stop-grad, var(--mp-red));
+            box-shadow: 0 2px 8px var(--mp-red-subtle);
+        }
         #monitor-toggle.btn-stop:hover { filter: brightness(1.15); }
-        #monitor-config { background: var(--mp-blue); }
-        #monitor-config:hover { filter: brightness(1.15); }
-        #monitor-clear  { background: var(--mp-gray); }
-        #monitor-clear:hover { filter: brightness(1.2); }
+        #monitor-config {
+            background: var(--mp-hover);
+            color: var(--mp-accent);
+            border: 1px solid var(--mp-border-strong);
+        }
+        #monitor-config:hover { background: var(--mp-accent-subtle); border-color: var(--mp-accent-dim); }
+        #monitor-clear {
+            background: var(--mp-hover);
+            color: var(--mp-text-secondary);
+            border: 1px solid var(--mp-border-strong);
+        }
+        #monitor-clear:hover { background: var(--mp-accent-subtle); color: var(--mp-accent); border-color: var(--mp-accent-dim); }
 
         /* === 配置面板 === */
         #config-panel {
@@ -167,10 +225,10 @@
             display: flex; gap: 8px;
         }
         #config-panel label { color: var(--mp-accent); font-weight: 500; font-size: 11px; }
-        #config-panel .cfg-title { font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 0.3px; }
+        #config-panel .cfg-title { font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 1.5px; }
         #config-panel .cfg-section {
             margin-bottom: 14px; padding: 10px 12px;
-            background: var(--mp-bg-section); border-radius: 8px;
+            background: var(--mp-bg-section); border-radius: 6px;
             border: 1px solid var(--mp-border);
         }
         #config-panel .cfg-section-label {
@@ -183,7 +241,7 @@
         #config-panel select,
         #config-panel textarea {
             background: var(--mp-input-bg); color: var(--mp-text);
-            border: 1px solid var(--mp-input-border); padding: 5px 8px; border-radius: 6px;
+            border: 1px solid var(--mp-input-border); padding: 5px 8px; border-radius: 5px;
             font-family: inherit; font-size: 11px;
             transition: border-color 0.15s;
             width: 100%; box-sizing: border-box;
@@ -196,23 +254,24 @@
         #config-panel .cfg-row { margin-bottom: 10px; }
         #config-panel .cfg-row label { display: block; margin-bottom: 4px; }
         #cfg-save {
-            flex: 1; padding: 8px 0; background: var(--mp-accent);
-            color: #fff; border: none; border-radius: 8px; cursor: pointer;
+            flex: 1; padding: 8px 0;
+            background: var(--mp-btn-primary-grad, var(--mp-accent));
+            color: #0e1525; border: none; border-radius: 4px; cursor: pointer;
             font-weight: 600; font-family: inherit; font-size: 12px;
             transition: filter 0.15s, transform 0.1s, box-shadow 0.15s;
             box-shadow: 0 2px 8px var(--mp-accent-dim);
         }
-        #cfg-save:hover { filter: brightness(1.15); box-shadow: 0 4px 12px var(--mp-accent-dim); }
+        #cfg-save:hover { filter: brightness(1.15); box-shadow: 0 2px 12px var(--mp-accent-dim); }
         #cfg-save:active { transform: scale(0.97); }
         #cfg-reset {
             flex: 1; padding: 8px 0;
-            background: var(--mp-bg-section);
+            background: var(--mp-hover);
             color: var(--mp-text-secondary);
-            border: 1px solid var(--mp-border-strong); border-radius: 8px;
+            border: 1px solid var(--mp-border-strong); border-radius: 4px;
             cursor: pointer; font-weight: 500; font-family: inherit; font-size: 12px;
             transition: background 0.15s, color 0.15s, border-color 0.15s;
         }
-        #cfg-reset:hover { background: var(--mp-bg-deep); color: var(--mp-text); border-color: var(--mp-text-muted); }
+        #cfg-reset:hover { background: var(--mp-accent-subtle); color: var(--mp-accent); border-color: var(--mp-accent-dim); }
         #cfg-reset:active { transform: scale(0.97); }
 
         /* === 优先级列表 === */
@@ -313,10 +372,10 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    function log(msg) {
+    function log(msg, type) {
         console.log(msg);
         if (typeof window.__monitorLog === 'function') {
-            window.__monitorLog(msg);
+            window.__monitorLog(msg, type);
         }
     }
 
@@ -348,10 +407,14 @@
     const _uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
     window.__lastToast = '';
     window.__lastToastTime = 0;
+    window.__shenshiInsufficient = false;
     const originalShowToast = _uw.showToast;
     _uw.showToast = function (msg) {
         window.__lastToast = msg;
         window.__lastToastTime = Date.now();
+        if (msg && msg.includes('神识不足')) {
+            window.__shenshiInsufficient = true;
+        }
         if (originalShowToast) originalShowToast.apply(this, arguments);
     };
 
@@ -492,11 +555,13 @@
         });
 
         // 日志
-        window.__monitorLog = function (msg) {
+        window.__monitorLog = function (msg, type) {
             const logEl = document.getElementById('monitor-log');
             if (!logEl) return;
             const line = document.createElement('div');
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            const cls = type ? ` log-${type}` : '';
+            line.className = cls.trim();
+            line.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
             logEl.appendChild(line);
             logEl.scrollTop = logEl.scrollHeight;
             while (logEl.children.length > 50) logEl.removeChild(logEl.firstChild);
@@ -517,7 +582,7 @@
                 // 先收功，等冥想彻底停止后再启动自动探索
                 const stopBtn = document.querySelector('.btn-stop-meditate');
                 if (stopBtn) {
-                    log('正在收功...');
+                    log('正在收功...', 'action');
                     stopBtn.click();
                     // 轮询等待冥想完全停止（游戏可能自动重新冥想，需要反复收功）
                     for (let i = 0; i < 20; i++) {
@@ -528,18 +593,18 @@
                         if (!isMeditating) break;
                         const sb = document.querySelector('.btn-stop-meditate');
                         if (sb) {
-                            log('检测到重新冥想，再次收功...');
+                            log('检测到重新冥想，再次收功...', 'action');
                             sb.click();
                         }
                     }
                     if (!window.__monitorRunning) { syncStopUI(); return; }
-                    log('收功完成，启动监控');
+                    log('收功完成，启动监控', 'success');
                 }
                 // 收功完毕后才开启自动探索和监控循环
                 status.textContent = '运行中';
                 toggleAutoCheckbox(true);
                 startMonitorLoop();
-                log('监控已启动');
+                log('监控已启动', 'success');
             } else {
                 btn.textContent = '启动';
                 btn.className = 'btn-start';
@@ -552,7 +617,7 @@
                     window.__monitorInterval = null;
                 }
                 toggleAutoCheckbox(false);
-                log('监控已暂停');
+                log('监控已暂停', 'warn');
             }
             e.stopPropagation();
         });
@@ -569,7 +634,7 @@
             e.stopPropagation();
         });
 
-        log('监控面板已加载（点击启动按钮开始）');
+        log('监控面板已加载（点击启动按钮开始）', 'info');
     }
 
     // --- 配置面板 UI ---
@@ -716,9 +781,9 @@
                 });
                 config.protectors.priorities = priorities;
                 saveConfig(config);
-                log('配置已保存');
+                log('配置已保存', 'success');
             } catch (e) {
-                log('配置保存失败: ' + e.message);
+                log('配置保存失败: ' + e.message, 'error');
             }
         });
 
@@ -728,7 +793,7 @@
             saveConfig(config);
             panel.remove();
             configPanelEl = null;
-            log('配置已重置为默认值');
+            log('配置已重置为默认值', 'warn');
         });
 
         // --- 优先级列表交互 ---
@@ -812,19 +877,19 @@
             const listText = list ? list.textContent : '';
             const hasEmptyText = listText.includes('暂无空闲');
 
-            log(`[waitForProtectorList] cards: ${count}, hasEmptyText: ${hasEmptyText}`);
+            log(`[waitForProtectorList] cards: ${count}, hasEmptyText: ${hasEmptyText}`, 'info');
 
             if (list && hasEmptyText) {
-                log('[waitForProtectorList] 检测到"暂无空闲"');
+                log('[waitForProtectorList] 检测到"暂无空闲"', 'warn');
                 return 'empty';
             }
             if (count > 0) {
-                log('[waitForProtectorList] 列表已加载');
+                log('[waitForProtectorList] 列表已加载', 'success');
                 return 'loaded';
             }
             await sleep(800);
         }
-        log('[waitForProtectorList] 超时');
+        log('[waitForProtectorList] 超时', 'error');
         return 'timeout';
     }
 
@@ -861,7 +926,7 @@
         if (items.length === 0) {
             if (!window.__monitorRunning) return false;
             if (attempt < maxRetries) {
-                log(`[尝试${attempt}] 未找到合适护道者，刷新列表...`);
+                log(`[尝试${attempt}] 未找到合适护道者，刷新列表...`, 'action');
                 dismissModal();
                 await sleep(retryDelay);
                 if (!window.__monitorRunning) return false;
@@ -872,7 +937,7 @@
                 if (!loaded) return false;
                 return await findAndHireProtector(attempt + 1);
             }
-            log(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`);
+            log(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`, 'error');
             return false;
         }
 
@@ -896,7 +961,7 @@
         if (!selected || selected.length === 0) {
             if (!window.__monitorRunning) return false;
             if (attempt < maxRetries) {
-                log(`[尝试${attempt}] 未找到合适护道者，刷新列表...`);
+                log(`[尝试${attempt}] 未找到合适护道者，刷新列表...`, 'action');
                 dismissModal();
                 await sleep(retryDelay);
                 if (!window.__monitorRunning) return false;
@@ -907,7 +972,7 @@
                 if (!loaded) return false;
                 return await findAndHireProtector(attempt + 1);
             }
-            log(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`);
+            log(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`, 'error');
             return false;
         }
 
@@ -915,7 +980,7 @@
         for (let i = 0; i < selected.length; i++) {
             if (!window.__monitorRunning) return false;
             const candidate = selected[i];
-            log(`[尝试${attempt}] 选择: ${candidate.name} ${candidate.realm} 攻击:${candidate.attack} (${candidate.priority})`);
+            log(`[尝试${attempt}] 选择: ${candidate.name} ${candidate.realm} 攻击:${candidate.attack} (${candidate.priority})`, 'info');
 
             // Hook fetch to capture hire response
             window.__hireResponse = null;
@@ -940,13 +1005,13 @@
                     if (wantSolo) {
                         if (text.includes('单独') || text.includes('单 独')) {
                             btn.click();
-                            log(' 已点击单独');
+                            log(' 已点击单独', 'action');
                             break;
                         }
                     } else {
                         if (text.includes('协同') || text.includes('协 同')) {
                             btn.click();
-                            log(' 已点击协同');
+                            log(' 已点击协同', 'action');
                             break;
                         }
                     }
@@ -969,8 +1034,8 @@
             }
 
             if (hireResult.status === 'failed') {
-                log(` 雇佣失败(code=400): ${hireResult.message}`);
-                log(' 刷新列表重新雇佣...');
+                log(` 雇佣失败(code=400): ${hireResult.message}`, 'error');
+                log(' 刷新列表重新雇佣...', 'action');
                 if (!window.__monitorRunning) return false;
                 dismissModal();
                 await sleep(800);
@@ -986,23 +1051,23 @@
             }
 
             if (hireResult.status === 'success') {
-                log(' 雇佣成功！');
+                log(' 雇佣成功！', 'success');
                 return true;
             }
 
             // No response, check toast
             const toast = window.__lastToast || '';
             if (toast) {
-                log(` 护道者提示: ${toast}`);
+                log(` 护道者提示: ${toast}`, 'info');
             }
-            log(' 雇佣完成（无明确响应）');
+            log(' 雇佣完成（无明确响应）', 'warn');
             return true;
         }
 
         // All candidates in this attempt failed
         if (!window.__monitorRunning) return false;
         if (attempt < maxRetries) {
-            log(`[尝试${attempt}] 当前列表所有护道者不可用，刷新...`);
+            log(`[尝试${attempt}] 当前列表所有护道者不可用，刷新...`, 'action');
             dismissModal();
             await sleep(retryDelay);
             if (!window.__monitorRunning) return false;
@@ -1013,7 +1078,7 @@
             if (!loaded) return false;
             return await findAndHireProtector(attempt + 1);
         }
-        log(`[尝试${attempt}] ${maxRetries}次尝试均失败`);
+        log(`[尝试${attempt}] ${maxRetries}次尝试均失败`, 'error');
         return false;
     }
 
@@ -1087,7 +1152,7 @@
         if (!window.__monitorRunning) return;
         shopping = true;
         try {
-            log('遇到云游商人！');
+            log('遇到云游商人！', 'info');
             if (!window.__monitorRunning) { shopping = false; return; }
             const mcfg = config.merchant;
             const items = document.querySelectorAll('.merchant-item');
@@ -1144,7 +1209,7 @@
             }
             // 未购买任何商品，点击婉拒关闭
             if (!bought) {
-                log('无可购买商品，婉拒告辞');
+                log('无可购买商品，婉拒告辞', 'info');
                 const leaveBtn = document.getElementById('merchantLeaveBtn');
                 if (leaveBtn) leaveBtn.click();
             }
@@ -1162,9 +1227,9 @@
             if (bought) {
                 console.log(`购买: ${bought.name} (${bought.price}灵石) [${bought.reason}]`);
             }
-            log('云游商人已处理');
+            log('云游商人已处理', 'success');
         } catch (e) {
-            log('商人错误: ' + e.message);
+            log('商人错误: ' + e.message, 'error');
         }
         shopping = false;
     }
@@ -1187,10 +1252,10 @@
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             // 检查是否已停止
             if (!window.__monitorRunning) {
-                log('脚本已停止，退出逃跑流程');
+                log('脚本已停止，退出逃跑流程', 'warn');
                 return false;
             }
-            log(`逃跑尝试 ${attempt}/${maxAttempts}...`);
+            log(`逃跑尝试 ${attempt}/${maxAttempts}...`, 'action');
             // Click 逃跑 button
             const overlay = document.getElementById('encounterOverlay');
             let clicked = false;
@@ -1205,26 +1270,26 @@
                 }
             }
             if (!clicked) {
-                log('未找到逃跑按钮');
+                log('未找到逃跑按钮', 'error');
                 return false;
             }
 
             // 等待800ms后检查遭遇面板是否还在
             await sleep(800);
             if (!window.__monitorRunning) {
-                log('脚本已停止，退出逃跑流程');
+                log('脚本已停止，退出逃跑流程', 'warn');
                 return false;
             }
             const o = document.getElementById('encounterOverlay');
             const stillVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
             if (!stillVisible) {
-                log('逃跑成功！');
+                log('逃跑成功！', 'success');
                 return true;
             }
-            log('逃跑失败，遭遇面板仍在，继续尝试...');
+            log('逃跑失败，遭遇面板仍在，继续尝试...', 'warn');
             await sleep(500);
         }
-        log(`${maxAttempts}次逃跑均失败`);
+        log(`${maxAttempts}次逃跑均失败`, 'error');
         return false;
     }
 
@@ -1240,11 +1305,11 @@
         }
         lastEncounterTime = now;
         try {
-            log('遭遇妖兽！开始雇佣流程...');
+            log('遭遇妖兽！开始雇佣流程...', 'info');
             if (!window.__monitorRunning) { hiring = false; return; }
             const overlay = document.getElementById('encounterOverlay');
             if (!overlay) {
-                log('未找到遭遇界面');
+                log('未找到遭遇界面', 'error');
                 hiring = false;
                 return;
             }
@@ -1260,11 +1325,11 @@
                 }
             }
             if (!step1) {
-                log('未找到雇佣护道按钮');
+                log('未找到雇佣护道按钮', 'error');
                 hiring = false;
                 return;
             }
-            log('已点击雇佣护道');
+            log('已点击雇佣护道', 'action');
             if (!window.__monitorRunning) { hiring = false; return; }
             const loaded = await waitForProtectorList(8000);
             if (!window.__monitorRunning) { hiring = false; return; }
@@ -1276,7 +1341,7 @@
                 // 根据配置决定：逃跑或迎战
                 if (config.protectors.onNoProtector === 'escape') {
                     // 逃跑逻辑
-                    log('暂无空闲护道者，尝试逃跑...');
+                    log('暂无空闲护道者，尝试逃跑...', 'info');
                     const escaped = await tryEscape();
                     if (!window.__monitorRunning) { hiring = false; return; }
                     hiring = false;
@@ -1284,7 +1349,7 @@
                     if (escaped) {
                         if (config.protectors.afterEscape === 'stop') {
                             // 点击冥想修炼并停止脚本
-                            log('逃跑成功！点击冥想修炼...');
+                            log('逃跑成功！点击冥想修炼...', 'success');
                             const btns = document.querySelectorAll('button');
                             for (const btn of btns) {
                                 if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
@@ -1292,7 +1357,7 @@
                                     break;
                                 }
                             }
-                            log('已逃跑并进入冥想，脚本停止');
+                            log('已逃跑并进入冥想，脚本停止', 'success');
                             window.__monitorRunning = false;
                             if (window.__monitorInterval) {
                                 clearInterval(window.__monitorInterval);
@@ -1301,11 +1366,11 @@
                             syncStopUI();
                         } else {
                             // 继续监控
-                            log('逃跑成功！继续监控...');
+                            log('逃跑成功！继续监控...', 'success');
                         }
                     } else {
                         // 逃跑失败，继续监控等待下次遭遇
-                        log('逃跑失败，继续监控...');
+                        log('逃跑失败，继续监控...', 'warn');
                     }
                     return;
                 }
@@ -1321,7 +1386,7 @@
                         if (atkMatch) {
                             const enemyAttack = parseInt(atkMatch[1]);
                             if (enemyAttack > threshold) {
-                                log(`妖兽攻击${enemyAttack}超过阈值${threshold}，转为逃跑...`);
+                                log(`妖兽攻击${enemyAttack}超过阈值${threshold}，转为逃跑...`, 'warn');
                                 if (!window.__monitorRunning) { hiring = false; return; }
                                 const escaped = await tryEscape();
                                 if (!window.__monitorRunning) { hiring = false; return; }
@@ -1329,7 +1394,7 @@
 
                                 if (escaped) {
                                     if (config.protectors.afterEscape === 'stop') {
-                                        log('逃跑成功！点击冥想修炼...');
+                                        log('逃跑成功！点击冥想修炼...', 'success');
                                         const btns = document.querySelectorAll('button');
                                         for (const btn of btns) {
                                             if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
@@ -1337,7 +1402,7 @@
                                                 break;
                                             }
                                         }
-                                        log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止');
+                                        log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止', 'success');
                                         window.__monitorRunning = false;
                                         if (window.__monitorInterval) {
                                             clearInterval(window.__monitorInterval);
@@ -1345,11 +1410,11 @@
                                         }
                                         syncStopUI();
                                     } else {
-                                        log('逃跑成功！继续监控...');
+                                        log('逃跑成功！继续监控...', 'success');
                                     }
                                 } else {
                                     // 逃跑失败，继续监控等待下次遭遇
-                                    log('逃跑失败，继续监控...');
+                                    log('逃跑失败，继续监控...', 'warn');
                                 }
                                 return;
                             }
@@ -1357,7 +1422,7 @@
                     }
                 }
 
-                log('暂无空闲护道者，选择迎战...');
+                log('暂无空闲护道者，选择迎战...', 'info');
                 // 在遭遇界面直接点击迎战按钮
                 if (!window.__monitorRunning) { hiring = false; return; }
                 const fightOverlay = document.getElementById('encounterOverlay');
@@ -1370,7 +1435,7 @@
                         }
                     }
                 }
-                log('已点击迎战，等待战斗结束...');
+                log('已点击迎战，等待战斗结束...', 'action');
                 const battleStart = Date.now();
                 while (Date.now() - battleStart < 60000) {
                     if (!window.__monitorRunning) { hiring = false; return; }
@@ -1379,16 +1444,16 @@
                     if (!overlayVisible) break;
                     await sleep(800);
                 }
-                log('战斗结束');
+                log('战斗结束', 'success');
                 hiring = false; // 立即释放
                 if (!window.__monitorRunning) return;
                 const tipDismissed = await dismissTipDialog(2000);
-                if (tipDismissed) log('已关闭打赏弹窗');
+                if (tipDismissed) log('已关闭打赏弹窗', 'info');
                 return;
             }
 
             if (loaded === 'timeout') {
-                log('护道者列表加载超时');
+                log('护道者列表加载超时', 'error');
                 hiring = false;
                 return;
             }
@@ -1397,13 +1462,13 @@
             const hired = await findAndHireProtector(1);
             if (!window.__monitorRunning) { hiring = false; return; }
             if (!hired) {
-                log('雇佣失败，无合适人选');
+                log('雇佣失败，无合适人选', 'error');
                 hiring = false;
                 return;
             }
 
             // Wait for battle to finish
-            log('等待战斗结束...');
+            log('等待战斗结束...', 'action');
             const battleStart = Date.now();
             while (Date.now() - battleStart < 60000) {
                 if (!window.__monitorRunning) { hiring = false; return; }
@@ -1411,7 +1476,7 @@
                 const overlayVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
                 if (!overlayVisible) break;
                 if (Date.now() - battleStart > 10000) {
-                    log('战斗超时10秒，重新雇佣...');
+                    log('战斗超时10秒，重新雇佣...', 'warn');
                     hiring = false;
                     if (!window.__monitorRunning) return;
                     await sleep(800);
@@ -1420,24 +1485,24 @@
                 }
                 await sleep(800);
             }
-            log('战斗结束');
+            log('战斗结束', 'success');
             hiring = false; // 立即释放，允许检测新遭遇
             if (!window.__monitorRunning) return;
 
             // Dismiss tip dialog
             if (!window.__monitorRunning) return;
             const tipDismissed = await dismissTipDialog(2000);
-            if (tipDismissed) log('已关闭打赏弹窗');
+            if (tipDismissed) log('已关闭打赏弹窗', 'info');
 
         } catch (e) {
-            log('错误: ' + e.message);
+            log('错误: ' + e.message, 'error');
             hiring = false;
         }
     }
 
     // --- 死亡复活流程 ---
     async function handleDeath() {
-        log('检测到死亡画面，点击引渡归来...');
+        log('检测到死亡画面，点击引渡归来...', 'info');
         await sleep(300);
         const deathOverlay = document.getElementById('deathOverlay');
         if (!deathOverlay) return;
@@ -1451,11 +1516,11 @@
             }
         }
         if (!revived) return;
-        log('已点击引渡归来，等待复活...');
+        log('已点击引渡归来，等待复活...', 'action');
         await sleep(3000);
 
         // 点击地图
-        log('点击地图按钮...');
+        log('点击地图按钮...', 'action');
         const iconBtns = document.querySelectorAll('.btn-icon');
         for (const btn of iconBtns) {
             if (btn.textContent.includes('地图')) {
@@ -1472,12 +1537,12 @@
             fourthNode.click();
             const nameEl = fourthNode.querySelector('.map-node-name');
             const mapName = nameEl ? nameEl.textContent.trim() : '第四个地图';
-            log(`点击第四个地图: ${mapName}...`);
+            log(`点击第四个地图: ${mapName}...`, 'action');
         }
         await sleep(300);
 
         // 点击神行符传送
-        log('使用神行符传送...');
+        log('使用神行符传送...', 'action');
         const allBtns = document.querySelectorAll('.btn-dialog-confirm, button');
         for (const btn of allBtns) {
             if (btn.textContent.includes('神行符')) {
@@ -1488,16 +1553,15 @@
         await sleep(300);
 
         // 关闭地图面板
-        log('关闭地图面板...');
+        log('关闭地图面板...', 'action');
         const closeBtn = document.querySelector('.btn-panel-close');
         if (closeBtn) closeBtn.click();
         await sleep(300);
 
-        log('死亡后流程完成，继续监控...');
+        log('死亡后流程完成，继续监控...', 'success');
     }
 
     // --- 主监控循环 ---
-    let __lastHandledToast = ''; // 避免重复处理同一条toast
     function startMonitorLoop() {
         window.__monitorInterval = setInterval(async () => {
             try {
@@ -1527,11 +1591,10 @@
                     }
                 }
 
-                // 检测神识不足 toast
-                const toast = window.__lastToast || '';
-                if (toast.includes('神识不足') && window.__lastToastTime !== __lastHandledToast) {
-                    __lastHandledToast = window.__lastToastTime;
-                    log('检测到神识不足，尝试高级冥想...');
+                // 检测神识不足（由 showToast 拦截实时设置标志）
+                if (window.__shenshiInsufficient) {
+                    window.__shenshiInsufficient = false;
+                    log('检测到神识不足，尝试高级冥想...', 'info');
 
                     // 先尝试高级冥想
                     let instantMeditateOk = false;
@@ -1539,7 +1602,7 @@
                         const data = await callApi('POST', '/api/game/meditate/instant', { grade: 2 });
                         if (data && (data.code === 0 || data.code === 200)) {
                             instantMeditateOk = true;
-                            log('高级冥想成功，点击冥想修炼...');
+                            log('高级冥想成功，点击冥想修炼...', 'success');
                             await sleep(500);
                             const medBtnOk = document.getElementById('meditateBtn');
                             if (medBtnOk && !medBtnOk.classList.contains('meditating')) {
@@ -1550,16 +1613,29 @@
                             for (const btn of stopBtns) {
                                 if (btn.textContent.trim() === '收功') {
                                     btn.click();
-                                    log('已点击收功');
+                                    log('已点击收功', 'action');
                                     break;
                                 }
                             }
-                            await sleep(500);
+                            // 轮询等待冥想完全停止
+                            for (let i = 0; i < 20; i++) {
+                                await sleep(1500);
+                                const medBtn = document.getElementById('meditateBtn');
+                                const isMeditating = medBtn && medBtn.classList.contains('meditating');
+                                if (!isMeditating) break;
+                                const sb = document.querySelector('.btn-stop-meditate');
+                                if (sb) {
+                                    log('检测到重新冥想，再次收功...', 'action');
+                                    sb.click();
+                                }
+                            }
+                            toggleAutoCheckbox(true);
+                            log('已勾选自动', 'action');
                         } else {
-                            log('高级冥想失败: ' + (data?.message || '未知原因') + '，转为冥想修炼');
+                            log('高级冥想失败: ' + (data?.message || '未知原因') + '，转为冥想修炼', 'warn');
                         }
                     } catch (e) {
-                        log('高级冥想异常: ' + e.message + '，转为冥想修炼');
+                        log('高级冥想异常: ' + e.message + '，转为冥想修炼', 'error');
                     }
 
                     if (instantMeditateOk) {
@@ -1582,7 +1658,7 @@
                         window.__monitorInterval = null;
                     }
                     syncStopUI();
-                    log('神识不足，已自动冥想并停止脚本');
+                    log('神识不足，已自动冥想并停止脚本', 'warn');
                     return;
                 }
             } catch (e) {
@@ -1594,5 +1670,5 @@
     // --- 初始化 ---
     createPanel();
     startMonitorLoop();
-    log('监控已加载，等待启动...');
+    log('监控已加载，等待启动...', 'info');
 })();
