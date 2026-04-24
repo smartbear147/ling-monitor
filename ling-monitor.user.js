@@ -9,6 +9,8 @@
 // @grant GM_addStyle
 // @grant unsafeWindow
 // @run-at document-idle
+// @downloadURL https://gh-proxy.org/https://raw.githubusercontent.com/smartbear147/ling-monitor/refs/heads/main/ling-monitor.user.js
+// @updateURL https://gh-proxy.org/https://raw.githubusercontent.com/smartbear147/ling-monitor/refs/heads/main/ling-monitor.user.js
 // ==/UserScript==
 
 (function () {
