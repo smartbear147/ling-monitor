@@ -318,6 +318,30 @@
         }
     }
 
+    // 通过注入脚本调用游戏的 api.request（页面上下文才有签名能力）
+    function callApi(method, path, body) {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('API 调用超时')), 10000);
+            const eventName = '__monitorApiResult_' + Date.now();
+            const handler = (e) => {
+                clearTimeout(timeout);
+                window.removeEventListener(eventName, handler);
+                try { resolve(JSON.parse(e.detail)); }
+                catch { resolve(e.detail); }
+            };
+            window.addEventListener(eventName, handler);
+            const bodyStr = body ? ',' + JSON.stringify(body) : '';
+            const s = document.createElement('script');
+            s.textContent = `api.request(${JSON.stringify(method)},${JSON.stringify(path)}${bodyStr}).then(r=>window.dispatchEvent(new CustomEvent('${eventName}',{detail:JSON.stringify(r)}))).catch(e=>window.dispatchEvent(new CustomEvent('${eventName}',{detail:JSON.stringify({code:-1,message:e.message})})))`;
+            document.head.appendChild(s);
+            s.remove();
+        });
+    }
+
+    async function getPlayerInfo() {
+        return await callApi('GET', '/api/player/info?fresh=1');
+    }
+
     // --- Toast 拦截 (用 unsafeWindow 绑定到页面真实 window) ---
     const _uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
     window.__lastToast = '';
@@ -621,6 +645,7 @@
                 <div class="cfg-row" style="display:flex;align-items:center;gap:8px;">
                     <input id="cfg-fallback" type="checkbox" ${cfg.merchant.fallbackToExpensive ? 'checked' : ''}>
                     <label style="margin-bottom:0;">无洗炼石时买最贵的</label>
+                    <span style="font-size:11px;opacity:0.6;">关闭则无匹配商品时自动婉拒</span>
                 </div>
             </div>
 
@@ -1115,6 +1140,19 @@
                 clickBuyItem(sorted[0].name);
                 bought = { ...sorted[0], reason: '最贵物品' };
             }
+            // 未购买任何商品，点击婉拒关闭
+            if (!bought) {
+                log('无可购买商品，婉拒告辞');
+                const leaveBtn = document.getElementById('merchantLeaveBtn');
+                if (leaveBtn) leaveBtn.click();
+            }
+
+            // 等待商人弹窗消失，防止重复处理
+            for (let i = 0; i < 10; i++) {
+                await sleep(100);
+                const stillVisible = document.querySelector('.modal-overlay:not([style*="display: none"]) .merchant-item');
+                if (!stillVisible) break;
+            }
 
             // Log
             console.log('商人物品列表:');
@@ -1123,12 +1161,6 @@
                 console.log(`购买: ${bought.name} (${bought.price}灵石) [${bought.reason}]`);
             }
             log('云游商人已处理');
-
-            // 关闭商人窗口
-            await sleep(500);
-            if (!window.__monitorRunning) { shopping = false; return; }
-            const leaveBtn = document.getElementById('merchantLeaveBtn');
-            if (leaveBtn) leaveBtn.click();
         } catch (e) {
             log('商人错误: ' + e.message);
         }
@@ -1497,18 +1529,51 @@
                 const toast = window.__lastToast || '';
                 if (toast.includes('神识不足') && window.__lastToastTime !== __lastHandledToast) {
                     __lastHandledToast = window.__lastToastTime;
-                    log('检测到神识不足，点击冥想修炼并停止脚本');
-                    // 停止游戏的自动探索
+                    log('检测到神识不足，尝试高级冥想...');
+
+                    // 先尝试高级冥想
+                    let instantMeditateOk = false;
+                    try {
+                        const data = await callApi('POST', '/api/game/meditate/instant', { grade: 2 });
+                        if (data && (data.code === 0 || data.code === 200)) {
+                            instantMeditateOk = true;
+                            log('高级冥想成功，点击冥想修炼...');
+                            await sleep(500);
+                            const medBtnOk = document.getElementById('meditateBtn');
+                            if (medBtnOk && !medBtnOk.classList.contains('meditating')) {
+                                medBtnOk.click();
+                            }
+                            await sleep(500);
+                            const stopBtns = document.querySelectorAll('button');
+                            for (const btn of stopBtns) {
+                                if (btn.textContent.trim() === '收功') {
+                                    btn.click();
+                                    log('已点击收功');
+                                    break;
+                                }
+                            }
+                            await sleep(500);
+                        } else {
+                            log('高级冥想失败: ' + (data?.message || '未知原因') + '，转为冥想修炼');
+                        }
+                    } catch (e) {
+                        log('高级冥想异常: ' + e.message + '，转为冥想修炼');
+                    }
+
+                    if (instantMeditateOk) {
+                        // 高级冥想成功，神识已恢复，继续监控
+                        return;
+                    }
+
+                    // 高级冥想失败，走原有流程：点击冥想修炼并停止脚本
                     if (window._autoExploreRunning) {
                         window.stopAutoExplore('神识不足', false);
                     }
-                    // 点击冥想修炼
                     const medBtn = document.getElementById('meditateBtn');
                     if (medBtn && !medBtn.classList.contains('meditating')) {
                         medBtn.click();
                     }
                     toggleAutoCheckbox(false);
-                    // 停止监控脚本
                     window.__monitorRunning = false;
                     if (window.__monitorInterval) {
                         clearInterval(window.__monitorInterval);
