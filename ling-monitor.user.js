@@ -403,6 +403,10 @@
         return await callApi('GET', '/api/player/info?fresh=1');
     }
 
+    async function getMasterOverview() {
+        return await callApi('GET', '/api/master/overview');
+    }
+
     // --- Toast 拦截 (用 unsafeWindow 绑定到页面真实 window) ---
     const _uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
     window.__lastToast = '';
@@ -575,6 +579,28 @@
             const btn = e.target;
             const status = document.getElementById('monitor-status');
             if (window.__monitorRunning) {
+                const playerInfo = await getPlayerInfo().catch(() => null);
+                if (playerInfo && playerInfo.data) {
+                    if (playerInfo.data.voidBodyBuffExpire) {
+                        const remain = Math.max(0, Math.round((playerInfo.data.voidBodyBuffExpire - Date.now()) / 1000));
+                        const h = Math.floor(remain / 3600);
+                        const m = Math.floor((remain % 3600) / 60);
+                        const s = remain % 60;
+                        log(`虚空淬体生效中，倍率 x${playerInfo.data.voidBodyBuffMultiplier}，剩余 ${h}时${m}分${s}秒`, 'success');
+                    } else if (!window._origConfirm('当前没有虚空淬体加成，是否继续启动监控？')) {
+                        window.__monitorRunning = false;
+                        return;
+                    }
+                }
+                const masterInfo = await getMasterOverview().catch(() => null);
+                if (masterInfo && masterInfo.data) {
+                    if (masterInfo.data.exploreBoostEnabled) {
+                        log('道韵加成已开启', 'success');
+                    } else if (!window._origConfirm('道韵加成未开启，是否继续启动监控？')) {
+                        window.__monitorRunning = false;
+                        return;
+                    }
+                }
                 btn.textContent = '停止';
                 btn.className = 'btn-stop';
                 status.textContent = '收功中...';
