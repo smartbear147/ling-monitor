@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界自动监控
 // @namespace https://ling.muge.info
-// @version 1.0.1
+// @version 1.4
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -21,71 +21,77 @@
         /* === 主题变量 (跟随页面亮暗模式) === */
         html.theme-dark #monitor-panel,
         html:not(.theme-light) #monitor-panel {
-            --mp-bg: #0c1220;
-            --mp-bg-section: rgba(180,140,60,0.04);
-            --mp-bg-deep: rgba(0,0,0,0.15);
-            --mp-text: #e8dfc8;
-            --mp-text-bright: #f0ece4;
-            --mp-text-secondary: #a89878;
-            --mp-text-muted: #5a5548;
-            --mp-accent: #c9993a;
-            --mp-accent-dim: rgba(201,153,58,0.25);
-            --mp-accent-glow: rgba(201,153,58,0.15);
-            --mp-accent-subtle: rgba(201,153,58,0.05);
-            --mp-red: #b85430;
-            --mp-red-subtle: rgba(184,84,48,0.15);
-            --mp-blue: #c9993a;
-            --mp-gray: #6b4423;
-            --mp-border: rgba(180,140,60,0.1);
-            --mp-border-strong: rgba(180,140,60,0.2);
-            --mp-hover: rgba(180,140,60,0.08);
-            --mp-input-bg: rgba(0,0,0,0.3);
-            --mp-input-border: rgba(180,140,60,0.15);
-            --mp-scrollbar: rgba(180,140,60,0.15);
-            --mp-shadow: 0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(180,140,60,0.1);
-            --mp-header-grad: linear-gradient(180deg, rgba(180,140,60,0.06) 0%, transparent 100%);
-            --mp-panel-grad: linear-gradient(180deg, #0c1220 0%, #0e1628 100%);
-            --mp-btn-primary-grad: linear-gradient(180deg, #c9993a 0%, #a07828 100%);
-            --mp-btn-stop-grad: linear-gradient(180deg, #8b3a2a 0%, #6a2820 100%);
-            --mp-gold-line: linear-gradient(90deg, transparent 0%, rgba(201,153,58,0.6) 50%, transparent 100%);
-            --mp-log-success: #7aad6a;
-            --mp-log-error: #d06050;
-            --mp-log-warn: #d4a854;
-            --mp-log-info: #7aa8b8;
-            --mp-log-action: #c9993a;
+            --mp-bg: #0e1528;
+            --mp-bg-section: rgba(200,160,80,0.03);
+            --mp-bg-card: rgba(0,0,0,0.25);
+            --mp-bg-input: rgba(0,0,0,0.4);
+
+            --mp-text: #f0ece4;
+            --mp-text-secondary: #b8a080;
+            --mp-text-muted: #9a8a70;
+            --mp-text-bright: #f5f2eb;
+
+            --mp-accent: #d4a84b;
+            --mp-accent-dim: rgba(212,168,75,0.25);
+            --mp-accent-glow: rgba(212,168,75,0.15);
+            --mp-accent-subtle: rgba(212,168,75,0.05);
+            --mp-jade: #4ecdc4;
+            --mp-jade-glow: rgba(78,205,196,0.2);
+            --mp-red: #ff6b6b;
+            --mp-red-glow: rgba(255,107,107,0.2);
+
+            --mp-border: rgba(200,160,80,0.08);
+            --mp-border-subtle: rgba(200,160,80,0.15);
+            --mp-border-strong: rgba(200,160,80,0.25);
+
+            --mp-shadow: 0 4px 20px rgba(0,0,0,0.4), 0 0 40px rgba(212,168,75,0.08);
+            --mp-shadow-inner: inset 0 1px 0 rgba(200,160,80,0.1);
+
+            --mp-header-grad: linear-gradient(180deg, rgba(212,168,75,0.08) 0%, transparent 100%);
+            --mp-gold-line: linear-gradient(90deg, transparent 0%, rgba(212,168,75,0.5) 20%, rgba(212,168,75,0.8) 50%, rgba(212,168,75,0.5) 80%, transparent 100%);
+            --mp-bg-texture: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(200,160,80,0.02) 2px, rgba(200,160,80,0.02) 4px);
+
+            --mp-log-success: #4ecdc4;
+            --mp-log-error: #ff6b6b;
+            --mp-log-warn: #f0a050;
+            --mp-log-info: #70a0c0;
+            --mp-log-action: #d4a84b;
         }
         html.theme-light #monitor-panel {
-            --mp-bg: #f0efed;
-            --mp-bg-section: #f4f4f0;
-            --mp-bg-deep: #eae9e7;
-            --mp-text: #1a1a1a;
-            --mp-text-bright: #1a1a1a;
-            --mp-text-secondary: #4a5a5a;
-            --mp-text-muted: #8a9090;
-            --mp-accent: #3a6a7a;
-            --mp-accent-dim: rgba(58,106,122,0.2);
-            --mp-accent-glow: rgba(58,106,122,0.1);
-            --mp-accent-subtle: rgba(58,106,122,0.05);
-            --mp-red: #b8463e;
-            --mp-red-subtle: rgba(184,70,62,0.1);
-            --mp-blue: #60c0e0;
-            --mp-gray: #8a9090;
-            --mp-border: rgba(60,60,60,0.12);
+            --mp-bg: #f5f3ef;
+            --mp-bg-section: #f0ece8;
+            --mp-bg-card: rgba(90,122,138,0.05);
+            --mp-bg-input: #eae6e2;
+
+            --mp-text: #2a3a4a;
+            --mp-text-secondary: #5a6a7a;
+            --mp-text-muted: #607080;
+            --mp-text-bright: #1a2a3a;
+
+            --mp-accent: #b8860b;
+            --mp-accent-dim: rgba(184,134,11,0.2);
+            --mp-accent-glow: rgba(184,134,11,0.1);
+            --mp-accent-subtle: rgba(184,134,11,0.05);
+            --mp-jade: #3a8a80;
+            --mp-jade-glow: rgba(58,138,128,0.15);
+            --mp-red: #c84040;
+            --mp-red-glow: rgba(200,64,64,0.15);
+
+            --mp-border: rgba(60,60,60,0.06);
+            --mp-border-subtle: rgba(60,60,60,0.12);
             --mp-border-strong: rgba(60,60,60,0.2);
-            --mp-hover: rgba(60,60,60,0.05);
-            --mp-input-bg: #eeedeb;
-            --mp-input-border: rgba(60,60,60,0.2);
-            --mp-scrollbar: rgba(60,60,60,0.2);
-            --mp-shadow: 0 4px 16px rgba(0,0,0,0.06);
-            --mp-header-grad: linear-gradient(180deg, #f4f4f0 0%, #f0efed 100%);
-            --mp-panel-grad: #f0efed;
-            --mp-btn-primary-grad: #5ec4a0;
-            --mp-btn-stop-grad: #b8463e;
-            --mp-gold-line: transparent;
+
+            --mp-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            --mp-shadow-inner: inset 0 1px 0 rgba(255,255,255,0.5);
+
+            --mp-header-grad: linear-gradient(180deg, #f8f6f2 0%, #f5f3ef 100%);
+            --mp-gold-line: linear-gradient(90deg, transparent 0%, rgba(184,134,11,0.3) 30%, rgba(184,134,11,0.5) 50%, rgba(184,134,11,0.3) 70%, transparent 100%);
+            --mp-bg-texture: none;
+
             --mp-log-success: #3a8a50;
-            --mp-log-error: #b8463e;
-            --mp-log-warn: #c08a30;
-            --mp-log-info: #3a6a7a;
+            --mp-log-error: #c84040;
+            --mp-log-warn: #b08030;
+            --mp-log-info: #3a6a80;
             --mp-log-action: #8a6a20;
         }
 
@@ -93,23 +99,28 @@
         #monitor-panel {
             position: fixed; top: 10px; right: 10px; width: 320px;
             max-width: calc(100vw - 20px);
-            background: var(--mp-panel-grad, var(--mp-bg));
-            border: 1px solid var(--mp-accent-dim);
-            border-radius: 6px; z-index: 99999;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif;
+            background: var(--mp-bg);
+            border: 1px solid var(--mp-border-subtle);
+            border-radius: 12px; z-index: 99999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 12px; font-weight: 500;
             color: var(--mp-text);
             box-shadow: var(--mp-shadow);
             overflow: hidden;
-            transition: width 0.2s ease;
         }
         #monitor-panel::before {
             content: '';
             position: absolute;
-            top: 0; left: 0; right: 0;
+            inset: 0;
+            background: var(--mp-bg-texture);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .mp-gold-line {
             height: 1px;
             background: var(--mp-gold-line);
-            z-index: 1;
+            position: relative;
+            z-index: 2;
         }
         #monitor-panel.minimized #monitor-body { display: none; }
         #monitor-panel.minimized { width: auto; min-width: 180px; }
@@ -119,202 +130,355 @@
             cursor: move; padding: 10px 14px;
             background: var(--mp-header-grad);
             display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--mp-border);
+            border-bottom: none;
             user-select: none;
+            position: relative;
+            z-index: 1;
         }
-        #monitor-header > span:first-child {
-            font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 1.5px;
+        .mp-header-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600; font-size: 13px; letter-spacing: 1.5px;
+            color: var(--mp-text-bright);
         }
-        #monitor-status { font-size: 11px; font-weight: 500; letter-spacing: 0.3px; }
-        #monitor-status.status-stopped { color: var(--mp-red); }
-        #monitor-status.status-running { color: var(--mp-accent); }
+        .mp-header-right {
+            display: flex; align-items: center; gap: 12px;
+        }
+        #monitor-status {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 11px; font-weight: 600; letter-spacing: 1px;
+            padding: 1px 10px; border-radius: 16px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        #monitor-status.status-stopped {
+            background: var(--mp-bg-card);
+            color: var(--mp-text-muted);
+            border: 1px solid var(--mp-border);
+        }
+        #monitor-status.status-running {
+            background: var(--mp-jade-glow);
+            color: var(--mp-jade);
+            border: 1px solid rgba(78,205,196,0.3);
+            animation: mp-pulse-glow 2s ease-in-out infinite;
+        }
+        .mp-status-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: currentColor;
+        }
+        #monitor-status.status-running .mp-status-dot {
+            animation: mp-pulse-dot 1.5s ease-in-out infinite;
+        }
         @keyframes mp-pulse-glow {
-            0%, 100% { opacity: 0.7; }
-            50% { opacity: 1; }
+            0%, 100% { box-shadow: 0 0 0 rgba(78,205,196,0); }
+            50% { box-shadow: 0 0 8px rgba(78,205,196,0.4); }
         }
-        html.theme-dark #monitor-status.status-running,
-        html:not(.theme-light) #monitor-status.status-running {
-            animation: mp-pulse-glow 1.5s ease-in-out infinite;
+        @keyframes mp-pulse-dot {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
         }
         #monitor-minimize {
-            cursor: pointer; font-size: 14px; color: var(--mp-text-secondary);
-            width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
-            border-radius: 6px; transition: background 0.15s, color 0.15s;
+            cursor: pointer;
+            width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 6px;
+            color: var(--mp-text-secondary);
+            background: transparent;
+            border: none;
+            font-size: 12px;
+            transition: all 0.15s ease;
         }
-        #monitor-minimize:hover { background: var(--mp-hover); color: var(--mp-text); }
-
-        /* === 日志颜色 === */
-        .log-time { color: var(--mp-text-muted); font-size: 10px; margin-right: 2px; }
-        #monitor-log > div.log-success { color: var(--mp-log-success); }
-        #monitor-log > div.log-error { color: var(--mp-log-error); }
-        #monitor-log > div.log-warn { color: var(--mp-log-warn); }
-        #monitor-log > div.log-info { color: var(--mp-log-info); }
-        #monitor-log > div.log-action { color: var(--mp-log-action); }
+        #monitor-minimize:hover {
+            background: var(--mp-accent-subtle);
+            color: var(--mp-accent);
+        }
 
         /* === 日志区域 === */
         #monitor-log {
             padding: 8px 12px; max-height: 200px; overflow-y: auto;
-            background: var(--mp-bg-deep);
-            scrollbar-width: thin; scrollbar-color: var(--mp-scrollbar) transparent;
+            background: var(--mp-bg-card);
+            scrollbar-width: thin; scrollbar-color: var(--mp-border-subtle) transparent;
         }
-        #monitor-log::-webkit-scrollbar { width: 4px; }
+        #monitor-log::-webkit-scrollbar { width: 5px; }
         #monitor-log::-webkit-scrollbar-track { background: transparent; }
-        #monitor-log::-webkit-scrollbar-thumb { background: var(--mp-scrollbar); border-radius: 2px; }
-        #monitor-log > div {
-            padding: 3px 0; border-bottom: 1px solid var(--mp-border);
-            word-break: break-all; color: var(--mp-text-secondary); font-size: 11px; line-height: 1.6;
-            font-family: 'Courier New', monospace;
+        #monitor-log::-webkit-scrollbar-thumb { background: var(--mp-border-subtle); border-radius: 3px; }
+        .mp-log-line {
+            padding: 3px 0 3px 10px;
+            display: flex; align-items: flex-start; gap: 8px;
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 11px; font-weight: 500;
+            line-height: 1.6;
+            border-bottom: 1px solid var(--mp-border);
+            position: relative;
         }
-        #monitor-log > div:last-child { border-bottom: none; }
+        .mp-log-line:last-child { border-bottom: none; }
+        .mp-log-time {
+            color: var(--mp-text-muted);
+            font-size: 10px; font-weight: 500;
+            min-width: 60px; flex-shrink: 0;
+        }
+        .mp-log-content {
+            color: var(--mp-text-secondary);
+            font-weight: 500;
+            word-break: break-all;
+        }
+        /* === 日志类型色条 === */
+        .mp-log-line::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 2px; border-radius: 1px;
+            background: var(--mp-border);
+        }
+        .mp-log-line.log-success::before { background: var(--mp-log-success); }
+        .mp-log-line.log-error::before { background: var(--mp-log-error); }
+        .mp-log-line.log-warn::before { background: var(--mp-log-warn); }
+        .mp-log-line.log-info::before { background: var(--mp-log-info); }
+        .mp-log-line.log-action::before { background: var(--mp-log-action); }
+        .mp-log-line.log-success .mp-log-content { color: var(--mp-log-success); }
+        .mp-log-line.log-error .mp-log-content { color: var(--mp-log-error); }
+        .mp-log-line.log-warn .mp-log-content { color: var(--mp-log-warn); }
+        .mp-log-line.log-info .mp-log-content { color: var(--mp-log-info); }
+        .mp-log-line.log-action .mp-log-content { color: var(--mp-log-action); }
 
         /* === 底部按钮栏 === */
         #monitor-body > div:last-child {
-            padding: 8px 12px; border-top: 1px solid var(--mp-border);
-            display: flex; gap: 6px; background: var(--mp-bg);
+            padding: 8px 12px;
+            border-top: 1px solid var(--mp-border);
+            display: flex; gap: 6px;
+            background: var(--mp-bg);
         }
-        #monitor-toggle, #monitor-config, #monitor-clear {
-            flex: 1; padding: 7px 4px; color: #fff; border: none; border-radius: 4px;
-            cursor: pointer; font-size: 11px; font-weight: 500;
-            transition: filter 0.15s, transform 0.1s;
-            font-family: inherit;
+        .mp-btn {
+            flex: 1; padding: 7px 4px;
+            border: none; border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 11px; font-weight: 600;
+            transition: all 0.15s ease;
+            position: relative;
+            overflow: hidden;
         }
-        #monitor-toggle:active, #monitor-config:active, #monitor-clear:active {
-            transform: scale(0.97);
+        .mp-btn.mp-btn-start {
+            background: linear-gradient(135deg, var(--mp-accent) 0%, #b8860b 100%);
+            color: var(--mp-bg);
+            box-shadow: 0 2px 8px var(--mp-accent-dim), var(--mp-shadow-inner);
         }
-        #monitor-toggle.btn-start {
-            background: var(--mp-btn-primary-grad, var(--mp-accent));
-            box-shadow: 0 2px 8px var(--mp-accent-dim);
-            letter-spacing: 0.5px;
+        .mp-btn.mp-btn-start:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--mp-accent-dim);
         }
-        #monitor-toggle.btn-start:hover { filter: brightness(1.15); box-shadow: 0 2px 12px var(--mp-accent-dim); }
-        #monitor-toggle.btn-stop {
-            background: var(--mp-btn-stop-grad, var(--mp-red));
-            box-shadow: 0 2px 8px var(--mp-red-subtle);
+        .mp-btn.mp-btn-start:active { transform: translateY(0) scale(0.97); }
+        .mp-btn.mp-btn-stop {
+            background: linear-gradient(135deg, var(--mp-red) 0%, #c84040 100%);
+            color: #fff;
+            box-shadow: 0 2px 8px var(--mp-red-glow);
         }
-        #monitor-toggle.btn-stop:hover { filter: brightness(1.15); }
-        #monitor-config {
-            background: var(--mp-hover);
+        .mp-btn.mp-btn-stop:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--mp-red-glow);
+        }
+        .mp-btn.mp-btn-stop:active { transform: translateY(0) scale(0.97); }
+        .mp-btn.mp-btn-config {
+            background: var(--mp-bg-card);
             color: var(--mp-accent);
-            border: 1px solid var(--mp-border-strong);
+            border: 1px solid var(--mp-border-subtle);
         }
-        #monitor-config:hover { background: var(--mp-accent-subtle); border-color: var(--mp-accent-dim); }
-        #monitor-clear {
-            background: var(--mp-hover);
+        .mp-btn.mp-btn-config:hover {
+            background: var(--mp-accent-subtle);
+            border-color: var(--mp-accent-dim);
+        }
+        .mp-btn.mp-btn-config:active { transform: scale(0.97); }
+        .mp-btn.mp-btn-clear {
+            background: var(--mp-bg-card);
+            color: var(--mp-text-muted);
+            border: 1px solid var(--mp-border);
+        }
+        .mp-btn.mp-btn-clear:hover {
+            background: var(--mp-bg-section);
             color: var(--mp-text-secondary);
-            border: 1px solid var(--mp-border-strong);
+            border-color: var(--mp-border-subtle);
         }
-        #monitor-clear:hover { background: var(--mp-accent-subtle); color: var(--mp-accent); border-color: var(--mp-accent-dim); }
 
         /* === 配置面板 === */
         #config-panel {
             width: 100%; max-height: 50vh; overflow-y: auto;
             background: var(--mp-bg);
-            border-top: 1px solid var(--mp-border);
-            font-family: inherit; font-size: 12px;
+            border-top: 1px solid var(--mp-border-subtle);
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 12px;
             color: var(--mp-text);
             padding: 12px; padding-bottom: 30px; box-sizing: border-box;
             position: relative;
-            scrollbar-width: thin; scrollbar-color: var(--mp-scrollbar) transparent;
+            z-index: 1;
+            scrollbar-width: thin; scrollbar-color: var(--mp-border-subtle) transparent;
         }
-        #config-panel::-webkit-scrollbar { width: 4px; }
-        #config-panel::-webkit-scrollbar-thumb { background: var(--mp-scrollbar); border-radius: 2px; }
-        #config-panel .cfg-bottom-bar {
-            position: relative; bottom: 0px; left: 0; right: 0;
+        #config-panel::-webkit-scrollbar { width: 5px; }
+        #config-panel::-webkit-scrollbar-thumb { background: var(--mp-border-subtle); border-radius: 3px; }
+        .cfg-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 16px;
+        }
+        .cfg-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600; font-size: 14px; letter-spacing: 2px;
+            color: var(--mp-text-bright);
+        }
+        .cfg-close {
+            cursor: pointer;
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 6px;
+            color: var(--mp-red); font-size: 18px; font-weight: bold;
             background: transparent;
-            padding: 12px 0 0; border-top: none;
-            display: flex; gap: 8px;
+            transition: all 0.15s;
         }
-        #config-panel label { color: var(--mp-accent); font-weight: 500; font-size: 11px; }
-        #config-panel .cfg-title { font-weight: 600; color: var(--mp-text-bright); font-size: 13px; letter-spacing: 1.5px; }
-        #config-panel .cfg-section {
+        .cfg-close:hover { background: var(--mp-red-glow); }
+        .cfg-section {
             margin-bottom: 14px; padding: 10px 12px;
-            background: var(--mp-bg-section); border-radius: 6px;
+            background: var(--mp-bg-section);
             border: 1px solid var(--mp-border);
+            border-radius: 8px;
         }
-        #config-panel .cfg-section-label {
-            font-size: 10px; font-weight: 600; color: var(--mp-text-muted);
-            text-transform: uppercase; letter-spacing: 1px;
-            margin-bottom: 8px;
+        .cfg-section:last-child { margin-bottom: 0; }
+        .cfg-section-label {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 10px; font-weight: 700;
+            color: var(--mp-text-muted);
+            text-transform: uppercase; letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+        .cfg-row { margin-bottom: 10px; }
+        .cfg-row:last-child { margin-bottom: 0; }
+        .cfg-label {
+            display: block;
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 12px; font-weight: 600;
+            color: var(--mp-accent);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+        .cfg-hint {
+            font-size: 11px; font-weight: 400;
+            color: var(--mp-text-muted);
+            margin-left: 8px;
         }
         #config-panel input[type=number],
         #config-panel input[type=text],
-        #config-panel select,
-        #config-panel textarea {
-            background: var(--mp-input-bg); color: var(--mp-text);
-            border: 1px solid var(--mp-input-border); padding: 5px 8px; border-radius: 5px;
-            font-family: inherit; font-size: 11px;
-            transition: border-color 0.15s;
-            width: 100%; box-sizing: border-box;
+        #config-panel select {
+            width: 100%; padding: 5px 8px;
+            background: var(--mp-bg-input);
+            color: var(--mp-text);
+            border: 1px solid var(--mp-border-subtle);
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 11px; font-weight: 500;
+            transition: all 0.15s;
         }
         #config-panel input:focus, #config-panel select:focus {
-            outline: none; border-color: var(--mp-accent);
+            outline: none;
+            border-color: var(--mp-accent);
             box-shadow: 0 0 0 2px var(--mp-accent-glow);
         }
-        #config-panel textarea { font-family: monospace; font-size: 11px; }
-        #config-panel .cfg-row { margin-bottom: 10px; }
-        #config-panel .cfg-row label { display: block; margin-bottom: 4px; }
-        #cfg-save {
+        #config-panel input[type=checkbox] {
+            width: 16px; height: 16px;
+            accent-color: var(--mp-accent);
+        }
+        .cfg-checkbox-row {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .cfg-bottom-bar {
+            display: flex; gap: 10px;
+            margin-top: 16px;
+        }
+        .cfg-btn {
             flex: 1; padding: 8px 0;
-            background: var(--mp-btn-primary-grad, var(--mp-accent));
-            color: #0e1525; border: none; border-radius: 4px; cursor: pointer;
-            font-weight: 600; font-family: inherit; font-size: 12px;
-            transition: filter 0.15s, transform 0.1s, box-shadow 0.15s;
+            border-radius: 4px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 12px; font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .cfg-btn-save {
+            background: linear-gradient(135deg, var(--mp-accent) 0%, #b8860b 100%);
+            color: var(--mp-bg);
+            border: none;
             box-shadow: 0 2px 8px var(--mp-accent-dim);
         }
-        #cfg-save:hover { filter: brightness(1.15); box-shadow: 0 2px 12px var(--mp-accent-dim); }
-        #cfg-save:active { transform: scale(0.97); }
-        #cfg-reset {
-            flex: 1; padding: 8px 0;
-            background: var(--mp-hover);
-            color: var(--mp-text-secondary);
-            border: 1px solid var(--mp-border-strong); border-radius: 4px;
-            cursor: pointer; font-weight: 500; font-family: inherit; font-size: 12px;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        .cfg-btn-save:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
         }
-        #cfg-reset:hover { background: var(--mp-accent-subtle); color: var(--mp-accent); border-color: var(--mp-accent-dim); }
-        #cfg-reset:active { transform: scale(0.97); }
+        .cfg-btn-reset {
+            background: var(--mp-bg-card);
+            color: var(--mp-text-secondary);
+            border: 1px solid var(--mp-border-subtle);
+        }
+        .cfg-btn-reset:hover {
+            background: var(--mp-accent-subtle);
+            color: var(--mp-accent);
+            border-color: var(--mp-accent-dim);
+        }
 
         /* === 优先级列表 === */
         .priority-list { display: flex; flex-direction: column; gap: 4px; }
         .priority-row {
             display: flex; align-items: center; gap: 4px;
-            background: var(--mp-bg-deep); border: 1px solid var(--mp-border-strong);
+            background: var(--mp-bg-card);
+            border: 1px solid var(--mp-border-subtle);
             border-radius: 6px; padding: 5px 8px;
-            transition: border-color 0.15s;
+            transition: all 0.15s;
         }
         .priority-row:hover { border-color: var(--mp-text-muted); }
         .priority-row.dragging { opacity: 0.4; }
         .priority-row.drag-over { border-color: var(--mp-accent); background: var(--mp-accent-subtle); }
-        .priority-handle { cursor: grab; color: var(--mp-text-muted); font-size: 14px; user-select: none; }
+        .priority-handle {
+            cursor: grab; color: var(--mp-text-muted);
+            font-size: 14px; user-select: none;
+            flex-shrink: 0;
+        }
         #config-panel .priority-row .priority-type {
-            background: var(--mp-input-bg) !important; color: var(--mp-text);
-            border: 1px solid var(--mp-border-strong); border-radius: 5px;
-            padding: 3px 8px; font-size: 11px; font-family: inherit;
-            width: 56px !important; min-width: 56px !important; max-width: 56px !important;
+            width: 72px; min-width: 72px; max-width: 72px;
+            padding: 3px 8px;
+            background: var(--mp-bg-input) !important;
+            color: var(--mp-text);
+            border: 1px solid var(--mp-border);
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 11px; font-weight: 500;
+            flex-shrink: 0;
             height: 26px; box-sizing: border-box;
-            flex-shrink: 0; flex-grow: 0;
             appearance: none; -webkit-appearance: none;
             text-align: center; text-align-last: center;
         }
         #config-panel .priority-row .priority-keyword {
-            flex: 1; min-width: 0; background: var(--mp-input-bg) !important;
-            color: var(--mp-text); border: 1px solid var(--mp-border-strong);
-            border-radius: 5px; padding: 3px 8px; font-size: 11px; font-family: inherit;
+            flex: 1; min-width: 0;
+            background: var(--mp-bg-input) !important;
+            color: var(--mp-text);
+            border: 1px solid var(--mp-border);
+            border-radius: 6px; padding: 3px 8px;
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 11px; font-weight: 500;
             height: 26px; box-sizing: border-box;
         }
         .priority-keyword:focus { outline: none; border-color: var(--mp-accent); }
         .priority-del {
-            cursor: pointer; color: var(--mp-red); font-size: 14px;
-            font-weight: bold; user-select: none; padding: 0 4px;
-            width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
-            border-radius: 4px; transition: background 0.15s;
+            cursor: pointer; color: var(--mp-red);
+            font-size: 14px; font-weight: bold;
+            user-select: none;
+            width: 20px; height: 20px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 6px; transition: all 0.15s;
+            flex-shrink: 0;
         }
-        .priority-del:hover { background: var(--mp-red-subtle); }
+        .priority-del:hover { background: var(--mp-red-glow); }
         .priority-add {
-            cursor: pointer; color: var(--mp-accent); font-size: 11px; font-weight: 500;
-            text-align: center; padding: 6px; border: 1px dashed var(--mp-border-strong);
+            cursor: pointer; color: var(--mp-accent);
+            font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 11px; font-weight: 500;
+            text-align: center; padding: 6px;
+            border: 1px dashed var(--mp-border-subtle);
             border-radius: 6px; margin-top: 4px;
-            transition: border-color 0.15s, background 0.15s;
+            transition: all 0.15s;
         }
         .priority-add:hover { border-color: var(--mp-accent); background: var(--mp-accent-subtle); }
     `);
@@ -323,13 +487,8 @@
     const DEFAULT_CONFIG = {
         protectors: {
             priorities: [
-                { nameMatch: '阿道夫', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '渡劫期三劫仙人', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '渡劫期二劫仙人', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '渡劫期一劫仙人', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '大乘期大圆满', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '大乘期后期', sortBy: 'attack', sortOrder: 'desc' },
-                { realmMatch: '大乘期中期', sortBy: 'attack', sortOrder: 'desc' },
+                { nameMatch: '蜉蝣一梦', sortBy: 'attack', sortOrder: 'desc' },
+                { realmMatch: '渡劫|大乘|合道', sortBy: 'attack', sortOrder: 'desc' }
             ],
             maxRetries: 3,
             retryDelayMs: 800,
@@ -340,28 +499,33 @@
         },
         merchant: {
             highPriceThreshold: 7500000,
-            stonePriority: ['传说', '史诗', '稀有', '优良', '普通'],
-            stoneKeywords: ['洗炼石'],
-            scrollKeywords: ['空白卷轴'],
+            stonePriority: ['传说', '史诗', '稀有', '优良', '普通', '极品', '上品', '中品', '下品'],
+            itemKeywords: ['洗炼石', '空白卷轴', '妖丹', '涅槃重生丹'],
             fallbackToExpensive: true,
         },
     };
 
-    // --- 配置读写 ---
     function loadConfig() {
-        const saved = GM_getValue('ling_config', null);
         const defaults = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+        const saved = GM_getValue('ling_config', null);
         if (saved) {
             try {
                 const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
-                // 合并默认配置，确保缺失字段有默认值
-                return { ...defaults, ...parsed, merchant: { ...defaults.merchant, ...(parsed.merchant || {}) } };
+                if (parsed._version === GM_info.script.version) {
+                    return {
+                        ...defaults, ...parsed,
+                        protectors: { ...defaults.protectors, ...(parsed.protectors || {}) },
+                        merchant: { ...defaults.merchant, ...(parsed.merchant || {}) },
+                    };
+                }
             } catch (e) { /* fallback */ }
         }
+        defaults._version = GM_info.script.version;
         return defaults;
     }
 
     function saveConfig(cfg) {
+        cfg._version = GM_info.script.version;
         GM_setValue('ling_config', JSON.stringify(cfg));
     }
 
@@ -439,10 +603,10 @@
         const status = document.getElementById('monitor-status');
         if (btn) {
             btn.textContent = '启动';
-            btn.className = 'btn-start';
+            btn.className = 'mp-btn mp-btn-start';
         }
         if (status) {
-            status.textContent = '已停止';
+            status.innerHTML = '<span class="mp-status-dot"></span>已停止';
             status.className = 'status-stopped';
         }
     }
@@ -455,19 +619,23 @@
         const panel = document.createElement('div');
         panel.id = 'monitor-panel';
         panel.innerHTML = `
+            <div class="mp-gold-line"></div>
             <div id="monitor-header">
-                <span>自动监控</span>
-                <span style="display:flex;align-items:center;gap:8px;">
-                    <span id="monitor-status" class="status-stopped">已停止</span>
+                <span class="mp-header-title">自动监控</span>
+                <div class="mp-header-right">
+                    <span id="monitor-status" class="status-stopped">
+                        <span class="mp-status-dot"></span>
+                        已停止
+                    </span>
                     <span id="monitor-minimize" title="缩小">&#x25BC;</span>
-                </span>
+                </div>
             </div>
             <div id="monitor-body">
                 <div id="monitor-log"></div>
                 <div>
-                    <button id="monitor-toggle" class="btn-start">启动</button>
-                    <button id="monitor-config">配置</button>
-                    <button id="monitor-clear">清日志</button>
+                    <button id="monitor-toggle" class="mp-btn mp-btn-start">启动</button>
+                    <button id="monitor-config" class="mp-btn mp-btn-config">配置</button>
+                    <button id="monitor-clear" class="mp-btn mp-btn-clear">清日志</button>
                 </div>
             </div>
         `;
@@ -564,8 +732,8 @@
             if (!logEl) return;
             const line = document.createElement('div');
             const cls = type ? ` log-${type}` : '';
-            line.className = cls.trim();
-            line.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            line.className = `mp-log-line${cls}`;
+            line.innerHTML = `<span class="mp-log-time">[${new Date().toLocaleTimeString()}]</span> <span class="mp-log-content">${msg}</span>`;
             logEl.appendChild(line);
             logEl.scrollTop = logEl.scrollHeight;
             while (logEl.children.length > 50) logEl.removeChild(logEl.firstChild);
@@ -602,8 +770,8 @@
                     }
                 }
                 btn.textContent = '停止';
-                btn.className = 'btn-stop';
-                status.textContent = '收功中...';
+                btn.className = 'mp-btn mp-btn-stop';
+                status.innerHTML = '<span class="mp-status-dot"></span>收功中...';
                 status.className = 'status-running';
                 // 先收功，等冥想彻底停止后再启动自动探索
                 const stopBtn = document.querySelector('.btn-stop-meditate');
@@ -627,14 +795,14 @@
                     log('收功完成，启动监控', 'success');
                 }
                 // 收功完毕后才开启自动探索和监控循环
-                status.textContent = '运行中';
+                status.innerHTML = '<span class="mp-status-dot"></span>运行中';
                 toggleAutoCheckbox(true);
                 startMonitorLoop();
                 log('监控已启动', 'success');
             } else {
                 btn.textContent = '启动';
-                btn.className = 'btn-start';
-                status.textContent = '已停止';
+                btn.className = 'mp-btn mp-btn-start';
+                status.innerHTML = '<span class="mp-status-dot"></span>已停止';
                 status.className = 'status-stopped';
                 hiring = false;
                 shopping = false;
@@ -675,41 +843,33 @@
         panel.id = 'config-panel';
         const cfg = JSON.parse(JSON.stringify(config));
         panel.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div class="cfg-header">
                 <span class="cfg-title">配置编辑</span>
-                <span id="config-close" style="cursor:pointer;color:var(--mp-red);font-size:16px;font-weight:bold;">&times;</span>
+                <span class="cfg-close">&times;</span>
             </div>
 
             <div class="cfg-section">
                 <div class="cfg-section-label">护道者设置</div>
                 <div class="cfg-row">
-                    <label>雇佣模式</label>
+                    <label class="cfg-label">雇佣模式</label>
                     <select id="cfg-hireMode">
                         <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
                         <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
                     </select>
                 </div>
                 <div class="cfg-row">
-                    <label>最大重试次数</label>
-                    <input id="cfg-maxRetries" type="number" value="${cfg.protectors.maxRetries}">
-                </div>
-                <div class="cfg-row">
-                    <label>重试延迟(ms)</label>
-                    <input id="cfg-retryDelay" type="number" value="${cfg.protectors.retryDelayMs}">
-                </div>
-                <div class="cfg-row">
-                    <label>无空闲护道者时</label>
+                    <label class="cfg-label">无空闲护道者时</label>
                     <select id="cfg-onNoProtector">
                         <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
                         <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
                     </select>
                 </div>
                 <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
-                    <label>迎战妖兽攻击阈值(超过则逃跑，0=不限制)</label>
+                    <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
                     <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
                 </div>
                 <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
-                    <label>逃跑后行为</label>
+                    <label class="cfg-label">逃跑后行为</label>
                     <select id="cfg-afterEscape">
                         <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
                         <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
@@ -720,30 +880,27 @@
             <div class="cfg-section">
                 <div class="cfg-section-label">商人设置</div>
                 <div class="cfg-row">
-                    <label>高价阈值(灵石)</label>
+                    <label class="cfg-label">高价阈值 (灵石)</label>
                     <input id="cfg-highPrice" type="number" value="${cfg.merchant.highPriceThreshold}">
                 </div>
                 <div class="cfg-row">
-                    <label>洗炼石品质优先级(逗号分隔)</label>
-                    <input id="cfg-stonePriority" type="text" value="${cfg.merchant.stonePriority.join(',')}">
+                    <label class="cfg-label">商品关键词 (|分隔，按顺序优先)</label>
+                    <input id="cfg-itemKeywords" type="text" value="${(cfg.merchant.itemKeywords || []).join('|')}">
                 </div>
                 <div class="cfg-row">
-                    <label>洗炼石关键词(逗号分隔)</label>
-                    <input id="cfg-stoneKeywords" type="text" value="${cfg.merchant.stoneKeywords.join(',')}">
+                    <label class="cfg-label">品质优先级 (|分隔)</label>
+                    <input id="cfg-stonePriority" type="text" value="${cfg.merchant.stonePriority.join('|')}">
                 </div>
-                <div class="cfg-row">
-                    <label>空白卷轴关键词(逗号分隔)</label>
-                    <input id="cfg-scrollKeywords" type="text" value="${cfg.merchant.scrollKeywords ? cfg.merchant.scrollKeywords.join(',') : '空白卷轴'}">
-                </div>
-                <div class="cfg-row" style="display:flex;align-items:center;gap:8px;">
+                <div class="cfg-row cfg-hint" style="padding:0;">匹配规则：先按关键词顺序，同关键词按品质优先级，高价物品始终最优先</div>
+                <div class="cfg-row cfg-checkbox-row">
                     <input id="cfg-fallback" type="checkbox" ${cfg.merchant.fallbackToExpensive ? 'checked' : ''}>
-                    <label style="margin-bottom:0;">无洗炼石时买最贵的</label>
-                    <span style="font-size:11px;opacity:0.6;">关闭则无匹配商品时自动婉拒</span>
+                    <label class="cfg-label" style="margin-bottom:0;">无匹配商品时买最贵的</label>
+                    <span class="cfg-hint">关闭则无匹配商品时自动婉拒</span>
                 </div>
             </div>
 
             <div class="cfg-section">
-                <div class="cfg-section-label">护道者优先级（按顺序匹配，越靠前越优先）</div>
+                <div class="cfg-section-label">护道者优先级（按顺序匹配，按|分隔）</div>
                 <div id="cfg-priority-list" class="priority-list">
                     ${cfg.protectors.priorities.map((r, i) => {
                         const isName = !!r.nameMatch;
@@ -763,37 +920,28 @@
             </div>
 
             <div class="cfg-bottom-bar">
-                <button id="cfg-save">保存</button>
-                <button id="cfg-reset">重置默认</button>
+                <button id="cfg-reset" class="cfg-btn cfg-btn-reset">重置默认</button>
             </div>
         `;
         const monitorPanel = document.getElementById('monitor-panel');
         monitorPanel.appendChild(panel);
         configPanelEl = panel;
-        document.getElementById('config-close').addEventListener('click', () => {
+        panel.querySelector('.cfg-close').addEventListener('click', () => {
+            autoSave();
             panel.remove();
             configPanelEl = null;
         });
 
-        // 联动：无空闲护道者时 → 显示/隐藏关联配置
-        document.getElementById('cfg-onNoProtector').addEventListener('change', (e) => {
-            document.getElementById('cfg-fightThreshold-wrap').style.display = e.target.value === 'fight' ? '' : 'none';
-            document.getElementById('cfg-afterEscape-wrap').style.display = e.target.value === 'escape' ? '' : 'none';
-        });
-
-        // 保存
-        document.getElementById('cfg-save').addEventListener('click', () => {
+        // 自动保存
+        function autoSave() {
             try {
-                config.protectors.maxRetries = parseInt(document.getElementById('cfg-maxRetries').value) || 3;
-                config.protectors.retryDelayMs = parseInt(document.getElementById('cfg-retryDelay').value) || 800;
                 config.protectors.hireMode = document.getElementById('cfg-hireMode').value;
                 config.protectors.onNoProtector = document.getElementById('cfg-onNoProtector').value;
                 config.protectors.fightAttackThreshold = parseInt(document.getElementById('cfg-fightThreshold').value) || 0;
                 config.protectors.afterEscape = document.getElementById('cfg-afterEscape').value;
                 config.merchant.highPriceThreshold = parseInt(document.getElementById('cfg-highPrice').value) || 7500000;
-                config.merchant.stonePriority = document.getElementById('cfg-stonePriority').value.split(',').map(s => s.trim()).filter(Boolean);
-                config.merchant.stoneKeywords = document.getElementById('cfg-stoneKeywords').value.split(',').map(s => s.trim()).filter(Boolean);
-                config.merchant.scrollKeywords = document.getElementById('cfg-scrollKeywords').value.split(',').map(s => s.trim()).filter(Boolean);
+                config.merchant.stonePriority = document.getElementById('cfg-stonePriority').value.split('|').map(s => s.trim()).filter(Boolean);
+                config.merchant.itemKeywords = document.getElementById('cfg-itemKeywords').value.split('|').map(s => s.trim()).filter(Boolean);
                 config.merchant.fallbackToExpensive = document.getElementById('cfg-fallback').checked;
                 const rows = document.querySelectorAll('#cfg-priority-list .priority-row');
                 const priorities = [];
@@ -811,7 +959,22 @@
             } catch (e) {
                 log('配置保存失败: ' + e.message, 'error');
             }
+        }
+
+        // 联动：无空闲护道者时 → 显示/隐藏关联配置
+        document.getElementById('cfg-onNoProtector').addEventListener('change', (e) => {
+            document.getElementById('cfg-fightThreshold-wrap').style.display = e.target.value === 'fight' ? '' : 'none';
+            document.getElementById('cfg-afterEscape-wrap').style.display = e.target.value === 'escape' ? '' : 'none';
         });
+
+        // 绑定自动保存事件
+        ['cfg-hireMode', 'cfg-onNoProtector', 'cfg-afterEscape'].forEach(id => {
+            document.getElementById(id).addEventListener('change', autoSave);
+        });
+        ['cfg-fightThreshold', 'cfg-highPrice', 'cfg-stonePriority', 'cfg-itemKeywords'].forEach(id => {
+            document.getElementById(id).addEventListener('change', autoSave);
+        });
+        document.getElementById('cfg-fallback').addEventListener('change', autoSave);
 
         // 重置
         document.getElementById('cfg-reset').addEventListener('click', () => {
@@ -843,12 +1006,14 @@
         }
 
         function bindRowEvents(row) {
-            row.querySelector('.priority-del').addEventListener('click', () => row.remove());
+            row.querySelector('.priority-del').addEventListener('click', () => { row.remove(); autoSave(); });
+            row.querySelector('.priority-type').addEventListener('change', autoSave);
+            row.querySelector('.priority-keyword').addEventListener('change', autoSave);
             row.addEventListener('dragstart', e => {
                 row.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
             });
-            row.addEventListener('dragend', () => row.classList.remove('dragging'));
+            row.addEventListener('dragend', () => { row.classList.remove('dragging'); autoSave(); });
             row.addEventListener('dragover', e => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
@@ -868,7 +1033,9 @@
         list.querySelectorAll('.priority-row').forEach(bindRowEvents);
 
         document.getElementById('cfg-priority-add').addEventListener('click', () => {
-            list.appendChild(makeRow('', 'realm'));
+            const row = makeRow('', 'realm');
+            list.appendChild(row);
+            row.querySelector('.priority-keyword').focus();
         });
     }
 
@@ -920,23 +1087,67 @@
     }
 
     // --- 护道者选择与雇佣 ---
+    const SUB_REALM_ORDER = {
+        '前期': 1, '中期': 2, '后期': 3, '大圆满': 4,
+        '一劫仙人': 1, '二劫仙人': 2, '三劫仙人': 3, '四劫仙人': 4,
+        '五劫仙人': 5, '六劫仙人': 6, '七劫仙人': 7, '八劫仙人': 8, '九劫仙人': 9,
+    };
+
+    function getSubRealmTier(realm) {
+        for (const [suffix, tier] of Object.entries(SUB_REALM_ORDER)) {
+            if (realm.endsWith(suffix)) return tier;
+        }
+        return 0;
+    }
+
     function matchProtector(prot, rule) {
         if (rule.nameMatch && !prot.name.includes(rule.nameMatch)) return false;
         if (rule.excludeName && prot.name.includes(rule.excludeName)) return false;
-        if (rule.realmMatch && !prot.realm.includes(rule.realmMatch)) return false;
+        if (rule.realmMatch && !rule.realmMatch.split('|').some(k => prot.realm.includes(k))) return false;
         if (rule.realmContains && !prot.realm.includes(rule.realmContains)) return false;
         return true;
     }
 
     function selectProtectors(protectors, priorities) {
         const result = [];
-        for (const rule of priorities) {
-            const matched = protectors.filter(p => matchProtector(p, rule));
-            if (rule.sortBy === 'attack') {
-                matched.sort((a, b) => rule.sortOrder === 'asc' ? a.attack - b.attack : b.attack - a.attack);
+        const seen = new Set();
+        function addMatched(matched, label) {
+            for (const p of matched) {
+                if (seen.has(p.index)) continue;
+                seen.add(p.index);
+                result.push({ ...p, priority: label });
             }
-            const label = rule.nameMatch || rule.realmMatch || 'unknown';
-            result.push(...matched.map(p => ({ ...p, priority: label })));
+        }
+        for (const rule of priorities) {
+            const realmKey = rule.realmMatch || rule.realmContains;
+            const nameKey = rule.nameMatch;
+            if (nameKey && nameKey.includes('|')) {
+                for (const keyword of nameKey.split('|')) {
+                    const matched = protectors.filter(p => p.name.includes(keyword));
+                    matched.sort((a, b) => b.attack - a.attack);
+                    addMatched(matched, keyword);
+                }
+            } else if (realmKey && realmKey.includes('|')) {
+                for (const keyword of realmKey.split('|')) {
+                    const matched = protectors.filter(p => p.realm.includes(keyword));
+                    matched.sort((a, b) => {
+                        const tierDiff = getSubRealmTier(b.realm) - getSubRealmTier(a.realm);
+                        return tierDiff !== 0 ? tierDiff : b.attack - a.attack;
+                    });
+                    addMatched(matched, keyword);
+                }
+            } else {
+                const matched = protectors.filter(p => matchProtector(p, rule));
+                if (realmKey) {
+                    matched.sort((a, b) => {
+                        const tierDiff = getSubRealmTier(b.realm) - getSubRealmTier(a.realm);
+                        return tierDiff !== 0 ? tierDiff : b.attack - a.attack;
+                    });
+                } else if (rule.sortBy === 'attack') {
+                    matched.sort((a, b) => rule.sortOrder === 'asc' ? a.attack - b.attack : b.attack - a.attack);
+                }
+                addMatched(matched, nameKey || realmKey || 'unknown');
+            }
         }
         return result;
     }
@@ -960,7 +1171,7 @@
                 await sleep(retryDelay);
                 if (!window.__monitorRunning) return false;
                 const loaded = await waitForProtectorList(8000);
-                if (!loaded) return false;
+                if (loaded === 'timeout') return false;
                 return await findAndHireProtector(attempt + 1);
             }
             log(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`, 'error');
@@ -995,7 +1206,7 @@
                 await sleep(retryDelay);
                 if (!window.__monitorRunning) return false;
                 const loaded = await waitForProtectorList(8000);
-                if (!loaded) return false;
+                if (loaded === 'timeout') return false;
                 return await findAndHireProtector(attempt + 1);
             }
             log(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`, 'error');
@@ -1008,48 +1219,52 @@
             const candidate = selected[i];
             log(`[尝试${attempt}] 选择: ${candidate.name} ${candidate.realm} 攻击:${candidate.attack} (${candidate.priority})`, 'info');
 
-            // Hook fetch to capture hire response
+            // Hook fetch to capture hire response (only intercept hire API)
             window.__hireResponse = null;
-            if (!window.__origFetchHire) window.__origFetchHire = window.fetch;
+            const origFetch = window.fetch;
             window.fetch = async function (...args) {
-                const resp = await window.__origFetchHire.apply(this, args);
-                try {
-                    const clone = resp.clone();
-                    const data = await clone.json();
-                    window.__hireResponse = data;
-                } catch (e) { }
+                const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+                const resp = await origFetch.apply(this, args);
+                if (url.includes('encounter-hire-protector')) {
+                    try {
+                        const clone = resp.clone();
+                        const data = await clone.json();
+                        window.__hireResponse = data;
+                    } catch (e) { }
+                }
                 return resp;
             };
-
-            // Click the hire button based on config (协同 or 单独)
-            const items = document.querySelectorAll('.protector-card');
-            if (items[candidate.index]) {
-                const btns = items[candidate.index].querySelectorAll('.prot-btn');
-                const wantSolo = config.protectors.hireMode === 'solo';
-                for (const btn of btns) {
-                    const text = btn.textContent.trim();
-                    if (wantSolo) {
-                        if (text.includes('单独') || text.includes('单 独')) {
-                            btn.click();
-                            log(' 已点击单独', 'action');
-                            break;
-                        }
-                    } else {
-                        if (text.includes('协同') || text.includes('协 同')) {
-                            btn.click();
-                            log(' 已点击协同', 'action');
-                            break;
+            let resp;
+            try {
+                // Click the hire button based on config (协同 or 单独)
+                if (items[candidate.index]) {
+                    const btns = items[candidate.index].querySelectorAll('.prot-btn');
+                    const wantSolo = config.protectors.hireMode === 'solo';
+                    for (const btn of btns) {
+                        const text = btn.textContent.trim();
+                        if (wantSolo) {
+                            if (text.includes('单独') || text.includes('单 独')) {
+                                btn.click();
+                                log(' 已点击单独', 'action');
+                                break;
+                            }
+                        } else {
+                            if (text.includes('协同') || text.includes('协 同')) {
+                                btn.click();
+                                log(' 已点击协同', 'action');
+                                break;
+                            }
                         }
                     }
                 }
-            }
-            await sleep(800);
-            if (!window.__monitorRunning) return false;
+                await sleep(800);
+                if (!window.__monitorRunning) return false;
 
-            // Check hire response (no confirm button needed, 协同 directly hires)
-            const resp = window.__hireResponse;
-            if (window.__origFetchHire) window.fetch = window.__origFetchHire;
-            window.__hireResponse = null;
+                resp = window.__hireResponse;
+            } finally {
+                window.fetch = origFetch;
+                window.__hireResponse = null;
+            }
             let hireResult;
             if (!resp) {
                 hireResult = { status: 'no_response' };
@@ -1101,7 +1316,7 @@
             await sleep(retryDelay);
             if (!window.__monitorRunning) return false;
             const loaded = await waitForProtectorList(8000);
-            if (!loaded) return false;
+            if (loaded === 'timeout') return false;
             return await findAndHireProtector(attempt + 1);
         }
         log(`[尝试${attempt}] ${maxRetries}次尝试均失败`, 'error');
@@ -1205,29 +1420,22 @@
                 clickBuyItem(expensiveItems[0].name);
                 bought = { ...expensiveItems[0], reason: '高价物品' };
             }
-            // 优先级2: 洗炼石
+            // 优先级2: 关键词商品（洗炼石、卷轴等，按配置顺序）
             if (!bought) {
-                for (const quality of mcfg.stonePriority) {
-                    const stone = allItems.find(i => i.name.includes(quality) && mcfg.stoneKeywords.some(kw => i.name.includes(kw)));
-                    if (stone) {
-                        clickBuyItem(stone.name);
-                        bought = { ...stone, reason: '洗炼石' };
-                        break;
+                const itemKeywords = mcfg.itemKeywords || [];
+                for (const kw of itemKeywords) {
+                    for (const quality of mcfg.stonePriority) {
+                        const item = allItems.find(i => i.name.includes(quality) && i.name.includes(kw));
+                        if (item) {
+                            clickBuyItem(item.name);
+                            bought = { ...item, reason: kw };
+                            break;
+                        }
                     }
+                    if (bought) break;
                 }
             }
-            // 优先级3: 空白卷轴（按稀有度降序）
-            if (!bought) {
-                for (const quality of mcfg.stonePriority) {
-                    const scroll = allItems.find(i => i.name.includes(quality) && mcfg.scrollKeywords.some(kw => i.name.includes(kw)));
-                    if (scroll) {
-                        clickBuyItem(scroll.name);
-                        bought = { ...scroll, reason: '空白卷轴' };
-                        break;
-                    }
-                }
-            }
-            // 优先级4: 买最贵的
+            // 优先级3: 买最贵的
             if (!bought && mcfg.fallbackToExpensive && allItems.length > 0) {
                 const sorted = [...allItems].sort((a, b) => b.price - a.price);
                 clickBuyItem(sorted[0].name);
@@ -1322,25 +1530,23 @@
     // --- 雇佣护道者主流程 ---
     async function hireProtector() {
         if (hiring) return;
-        if (!window.__monitorRunning) return; // 检查是否已停止
+        if (!window.__monitorRunning) return;
         hiring = true;
         const now = Date.now();
-        if (now - lastEncounterTime < 3000) { // 缩短到3秒，防止重复处理同一遭遇
+        if (now - lastEncounterTime < 3000) {
             hiring = false;
             return;
         }
         lastEncounterTime = now;
         try {
             log('遭遇妖兽！开始雇佣流程...', 'info');
-            if (!window.__monitorRunning) { hiring = false; return; }
+            if (!window.__monitorRunning) return;
             const overlay = document.getElementById('encounterOverlay');
             if (!overlay) {
                 log('未找到遭遇界面', 'error');
-                hiring = false;
                 return;
             }
 
-            // 根据设置决定：优先雇佣，无空闲时迎战或逃跑
             const overlayBtns = overlay.querySelectorAll('button');
             let step1 = false;
             for (const btn of overlayBtns) {
@@ -1352,29 +1558,24 @@
             }
             if (!step1) {
                 log('未找到雇佣护道按钮', 'error');
-                hiring = false;
                 return;
             }
             log('已点击雇佣护道', 'action');
-            if (!window.__monitorRunning) { hiring = false; return; }
+            if (!window.__monitorRunning) return;
             const loaded = await waitForProtectorList(8000);
-            if (!window.__monitorRunning) { hiring = false; return; }
+            if (!window.__monitorRunning) return;
             if (loaded === 'empty') {
                 dismissModal();
                 await sleep(800);
-                if (!window.__monitorRunning) { hiring = false; return; }
+                if (!window.__monitorRunning) return;
 
-                // 根据配置决定：逃跑或迎战
                 if (config.protectors.onNoProtector === 'escape') {
-                    // 逃跑逻辑
                     log('暂无空闲护道者，尝试逃跑...', 'info');
                     const escaped = await tryEscape();
-                    if (!window.__monitorRunning) { hiring = false; return; }
-                    hiring = false;
+                    if (!window.__monitorRunning) return;
 
                     if (escaped) {
                         if (config.protectors.afterEscape === 'stop') {
-                            // 点击冥想修炼并停止脚本
                             log('逃跑成功！点击冥想修炼...', 'success');
                             const btns = document.querySelectorAll('button');
                             for (const btn of btns) {
@@ -1391,66 +1592,56 @@
                             }
                             syncStopUI();
                         } else {
-                            // 继续监控
                             log('逃跑成功！继续监控...', 'success');
                         }
                     } else {
-                        // 逃跑失败，继续监控等待下次遭遇
                         log('逃跑失败，继续监控...', 'warn');
                     }
                     return;
                 }
 
                 // onNoProtector === 'fight'
-                // 检查妖兽攻击力是否超过阈值
                 const threshold = config.protectors.fightAttackThreshold;
                 if (threshold > 0) {
-                    const fightOverlay = document.getElementById('encounterOverlay');
-                    if (fightOverlay) {
-                        const metaText = fightOverlay.textContent;
-                        const atkMatch = metaText.match(/攻击\s*(\d+)/);
-                        if (atkMatch) {
-                            const enemyAttack = parseInt(atkMatch[1]);
-                            if (enemyAttack > threshold) {
-                                log(`妖兽攻击${enemyAttack}超过阈值${threshold}，转为逃跑...`, 'warn');
-                                if (!window.__monitorRunning) { hiring = false; return; }
-                                const escaped = await tryEscape();
-                                if (!window.__monitorRunning) { hiring = false; return; }
-                                hiring = false;
+                    const atkEl = document.getElementById('encounterMonsterAtk');
+                    if (atkEl) {
+                        const enemyAttack = parseInt(atkEl.textContent);
+                        if (enemyAttack > threshold) {
+                            log(`妖兽攻击${enemyAttack}超过阈值${threshold}，转为逃跑...`, 'warn');
+                            if (!window.__monitorRunning) return;
+                            const escaped = await tryEscape();
+                            if (!window.__monitorRunning) return;
 
-                                if (escaped) {
-                                    if (config.protectors.afterEscape === 'stop') {
-                                        log('逃跑成功！点击冥想修炼...', 'success');
-                                        const btns = document.querySelectorAll('button');
-                                        for (const btn of btns) {
-                                            if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
-                                                btn.click();
-                                                break;
-                                            }
+                            if (escaped) {
+                                if (config.protectors.afterEscape === 'stop') {
+                                    log('逃跑成功！点击冥想修炼...', 'success');
+                                    const btns = document.querySelectorAll('button');
+                                    for (const btn of btns) {
+                                        if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
+                                            btn.click();
+                                            break;
                                         }
-                                        log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止', 'success');
-                                        window.__monitorRunning = false;
-                                        if (window.__monitorInterval) {
-                                            clearInterval(window.__monitorInterval);
-                                            window.__monitorInterval = null;
-                                        }
-                                        syncStopUI();
-                                    } else {
-                                        log('逃跑成功！继续监控...', 'success');
                                     }
+                                    log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止', 'success');
+                                    window.__monitorRunning = false;
+                                    if (window.__monitorInterval) {
+                                        clearInterval(window.__monitorInterval);
+                                        window.__monitorInterval = null;
+                                    }
+                                    syncStopUI();
                                 } else {
-                                    // 逃跑失败，继续监控等待下次遭遇
-                                    log('逃跑失败，继续监控...', 'warn');
+                                    log('逃跑成功！继续监控...', 'success');
                                 }
-                                return;
+                            } else {
+                                log('逃跑失败，继续监控...', 'warn');
                             }
+                            return;
                         }
                     }
                 }
 
                 log('暂无空闲护道者，选择迎战...', 'info');
-                // 在遭遇界面直接点击迎战按钮
-                if (!window.__monitorRunning) { hiring = false; return; }
+                if (!window.__monitorRunning) return;
                 const fightOverlay = document.getElementById('encounterOverlay');
                 if (fightOverlay) {
                     const btns = fightOverlay.querySelectorAll('button');
@@ -1464,14 +1655,13 @@
                 log('已点击迎战，等待战斗结束...', 'action');
                 const battleStart = Date.now();
                 while (Date.now() - battleStart < 60000) {
-                    if (!window.__monitorRunning) { hiring = false; return; }
+                    if (!window.__monitorRunning) return;
                     const o = document.getElementById('encounterOverlay');
                     const overlayVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
                     if (!overlayVisible) break;
                     await sleep(800);
                 }
                 log('战斗结束', 'success');
-                hiring = false; // 立即释放
                 if (!window.__monitorRunning) return;
                 const tipDismissed = await dismissTipDialog(2000);
                 if (tipDismissed) log('已关闭打赏弹窗', 'info');
@@ -1480,31 +1670,28 @@
 
             if (loaded === 'timeout') {
                 log('护道者列表加载超时', 'error');
-                hiring = false;
                 return;
             }
 
             // loaded === 'loaded' - 执行雇佣逻辑
             const hired = await findAndHireProtector(1);
-            if (!window.__monitorRunning) { hiring = false; return; }
+            if (!window.__monitorRunning) return;
             if (!hired) {
                 log('雇佣失败，无合适人选', 'error');
-                hiring = false;
                 return;
             }
 
-            // Wait for battle to finish
             log('等待战斗结束...', 'action');
             const battleStart = Date.now();
             while (Date.now() - battleStart < 60000) {
-                if (!window.__monitorRunning) { hiring = false; return; }
+                if (!window.__monitorRunning) return;
                 const o = document.getElementById('encounterOverlay');
                 const overlayVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
                 if (!overlayVisible) break;
                 if (Date.now() - battleStart > 10000) {
                     log('战斗超时10秒，重新雇佣...', 'warn');
-                    hiring = false;
                     if (!window.__monitorRunning) return;
+                    hiring = false;
                     await sleep(800);
                     await hireProtector();
                     return;
@@ -1512,16 +1699,14 @@
                 await sleep(800);
             }
             log('战斗结束', 'success');
-            hiring = false; // 立即释放，允许检测新遭遇
             if (!window.__monitorRunning) return;
 
-            // Dismiss tip dialog
-            if (!window.__monitorRunning) return;
             const tipDismissed = await dismissTipDialog(2000);
             if (tipDismissed) log('已关闭打赏弹窗', 'info');
 
         } catch (e) {
             log('错误: ' + e.message, 'error');
+        } finally {
             hiring = false;
         }
     }
@@ -1695,6 +1880,5 @@
 
     // --- 初始化 ---
     createPanel();
-    startMonitorLoop();
     log('监控已加载，等待启动...', 'info');
 })();
