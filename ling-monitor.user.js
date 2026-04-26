@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界自动监控
 // @namespace https://ling.muge.info
-// @version 1.4
+// @version 1.5
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -483,7 +483,12 @@
         .priority-add:hover { border-color: var(--mp-accent); background: var(--mp-accent-subtle); }
     `);
 
-    // --- 默认配置 ---
+    // --- 版本与配置 ---
+    const SCRIPT_VERSION = '1.5';
+
+    // 版本升级时强制覆盖这些配置项为默认值（用点号路径: 'protectors.maxRetries'）
+    const FORCE_OVERRIDE = [];
+
     const DEFAULT_CONFIG = {
         protectors: {
             priorities: [
@@ -511,21 +516,30 @@
         if (saved) {
             try {
                 const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
-                if (parsed._version === GM_info.script.version) {
-                    return {
-                        ...defaults, ...parsed,
-                        protectors: { ...defaults.protectors, ...(parsed.protectors || {}) },
-                        merchant: { ...defaults.merchant, ...(parsed.merchant || {}) },
-                    };
+                const result = {
+                    ...defaults, ...parsed,
+                    protectors: { ...defaults.protectors, ...(parsed.protectors || {}) },
+                    merchant: { ...defaults.merchant, ...(parsed.merchant || {}) },
+                };
+                // 版本升级时强制覆盖指定配置项
+                if (parsed._version !== SCRIPT_VERSION) {
+                    FORCE_OVERRIDE.forEach(path => {
+                        const [section, key] = path.split('.');
+                        if (defaults[section] && key in defaults[section]) {
+                            result[section][key] = JSON.parse(JSON.stringify(defaults[section][key]));
+                        }
+                    });
                 }
+                result._version = SCRIPT_VERSION;
+                return result;
             } catch (e) { /* fallback */ }
         }
-        defaults._version = GM_info.script.version;
+        defaults._version = SCRIPT_VERSION;
         return defaults;
     }
 
     function saveConfig(cfg) {
-        cfg._version = GM_info.script.version;
+        cfg._version = SCRIPT_VERSION;
         GM_setValue('ling_config', JSON.stringify(cfg));
     }
 
@@ -771,20 +785,23 @@
                 }
                 btn.textContent = '停止';
                 btn.className = 'mp-btn mp-btn-stop';
-                status.innerHTML = '<span class="mp-status-dot"></span>收功中...';
                 status.className = 'status-running';
                 // 先收功，等冥想彻底停止后再启动自动探索
-                const stopBtn = document.querySelector('.btn-stop-meditate');
-                if (stopBtn) {
-                    log('正在收功...', 'action');
-                    stopBtn.click();
+                const needStopMeditate = playerInfo && playerInfo.data && playerInfo.data.isMeditating;
+                if (needStopMeditate) {
+                    status.innerHTML = '<span class="mp-status-dot"></span>收功中...';
+                    const stopBtn = document.querySelector('.btn-stop-meditate');
+                    if (stopBtn) {
+                        log('正在收功...', 'action');
+                        stopBtn.click();
+                    }
                     // 轮询等待冥想完全停止（游戏可能自动重新冥想，需要反复收功）
                     for (let i = 0; i < 20; i++) {
                         await sleep(1500);
                         if (!window.__monitorRunning) { syncStopUI(); return; }
                         const medBtn = document.getElementById('meditateBtn');
-                        const isMeditating = medBtn && medBtn.classList.contains('meditating');
-                        if (!isMeditating) break;
+                        const stillMeditating = medBtn && medBtn.classList.contains('meditating');
+                        if (!stillMeditating) break;
                         const sb = document.querySelector('.btn-stop-meditate');
                         if (sb) {
                             log('检测到重新冥想，再次收功...', 'action');
@@ -1388,6 +1405,7 @@
 
     // --- 商人逻辑 ---
     let shopping = false;
+    let dying = false;
     async function handleMerchant() {
         if (shopping) return;
         if (!window.__monitorRunning) return;
@@ -1728,9 +1746,9 @@
         }
         if (!revived) return;
         log('已点击引渡归来，等待复活...', 'action');
-        await sleep(3000);
+        await sleep(800);
 
-        // 点击地图
+        // 移动到第四个地图节点
         log('点击地图按钮...', 'action');
         const iconBtns = document.querySelectorAll('.btn-icon');
         for (const btn of iconBtns) {
@@ -1739,37 +1757,54 @@
                 break;
             }
         }
-        await sleep(300);
+        await sleep(1000);
 
-        // 点击第四个地图节点
-        const nodes = document.querySelectorAll('.map-node');
-        if (nodes.length >= 4) {
-            const fourthNode = nodes[3];
-            fourthNode.click();
-            const nameEl = fourthNode.querySelector('.map-node-name');
-            const mapName = nameEl ? nameEl.textContent.trim() : '第四个地图';
-            log(`点击第四个地图: ${mapName}...`, 'action');
-        }
-        await sleep(300);
-
-        // 点击神行符传送
-        log('使用神行符传送...', 'action');
-        const allBtns = document.querySelectorAll('.btn-dialog-confirm, button');
-        for (const btn of allBtns) {
-            if (btn.textContent.includes('神行符')) {
-                btn.click();
-                break;
+        // Hook _uw.fetch 拦截移动响应
+        window.__moveResponse = null;
+        const origMoveFetch = _uw.fetch;
+        _uw.fetch = async function (...args) {
+            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+            const resp = await origMoveFetch.apply(this, args);
+            if (url.includes('/api/game/move')) {
+                try {
+                    const clone = resp.clone();
+                    const data = await clone.json();
+                    if (data.code === 200 && typeof data.data === 'string') {
+                        window.__moveResponse = data;
+                    }
+                } catch (e) { }
             }
-        }
-        await sleep(300);
+            return resp;
+        };
 
-        // 关闭地图面板
-        log('关闭地图面板...', 'action');
-        const closeBtn = document.querySelector('.btn-panel-close');
-        if (closeBtn) closeBtn.click();
+        try {
+            const nodes = document.querySelectorAll('.map-node');
+            if (nodes.length >= 4) {
+                const nameEl = nodes[3].querySelector('.map-node-name');
+                const mapName = nameEl ? nameEl.textContent.trim() : '第四个地图';
+                log(`点击第四个地图: ${mapName}...`, 'action');
+                nodes[3].click();
+            }
+
+            // 等待移动响应（最多5秒）
+            for (let i = 0; i < 25; i++) {
+                await sleep(200);
+                if (window.__moveResponse) break;
+            }
+
+            if (window.__moveResponse) {
+                log(window.__moveResponse.data, 'success');
+            } else {
+                log('移动超时，未收到响应', 'warn');
+            }
+        } finally {
+            _uw.fetch = origMoveFetch;
+            window.__moveResponse = null;
+        }
         await sleep(300);
 
         log('死亡后流程完成，继续监控...', 'success');
+        toggleAutoCheckbox(true);
     }
 
     // --- 主监控循环 ---
@@ -1780,8 +1815,10 @@
 
                 // Check for death overlay first
                 const d = document.getElementById('deathOverlay');
-                if (d && getComputedStyle(d).display !== 'none' && d.offsetParent !== null) {
+                if (d && getComputedStyle(d).display !== 'none' && d.querySelector('.btn-revive') && !dying) {
+                    dying = true;
                     await handleDeath();
+                    dying = false;
                     return;
                 }
 
