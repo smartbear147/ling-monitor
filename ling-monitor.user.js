@@ -175,7 +175,7 @@
             0%, 100% { transform: scale(1); opacity: 0.8; }
             50% { transform: scale(1.3); opacity: 1; }
         }
-        #monitor-minimize {
+        #monitor-minimize, #monitor-close {
             cursor: pointer;
             width: 24px; height: 24px;
             display: flex; align-items: center; justify-content: center;
@@ -189,6 +189,13 @@
         #monitor-minimize:hover {
             background: var(--mp-accent-subtle);
             color: var(--mp-accent);
+        }
+        #monitor-close {
+            color: var(--mp-red);
+            font-size: 14px; font-weight: bold;
+        }
+        #monitor-close:hover {
+            background: var(--mp-red-glow);
         }
 
         /* === 日志区域 === */
@@ -640,6 +647,7 @@
                         已停止
                     </span>
                     <span id="monitor-minimize" title="缩小">&#x25BC;</span>
+                    <span id="monitor-close" title="关闭">&#x2716;</span>
                 </div>
             </div>
             <div id="monitor-body">
@@ -686,8 +694,8 @@
 
         // PC端鼠标事件
         header.addEventListener('mousedown', (e) => {
-            // 排除按钮点击（如果点击的是status或minimize，不触发拖动）
-            if (e.target.id && (e.target.id.includes('status') || e.target.id.includes('minimize'))) return;
+            // 排除按钮点击（如果点击的是status、minimize或close，不触发拖动）
+            if (e.target.id && (e.target.id.includes('status') || e.target.id.includes('minimize') || e.target.id.includes('close'))) return;
             startDrag(e.clientX, e.clientY);
             e.preventDefault();
         });
@@ -704,7 +712,7 @@
         header.addEventListener('touchstart', (e) => {
             // 排除按钮点击
             const target = e.target;
-            if (target.id && (target.id.includes('status') || target.id.includes('minimize'))) return;
+            if (target.id && (target.id.includes('status') || target.id.includes('minimize') || target.id.includes('close'))) return;
             const touch = e.touches[0];
             startDrag(touch.clientX, touch.clientY);
             e.preventDefault();
@@ -735,6 +743,22 @@
                 arrow.innerHTML = '&#x25B6;';
                 if (configP) configP.style.display = 'none';
             }
+            e.stopPropagation();
+        });
+
+        // 关闭面板
+        document.getElementById('monitor-close').addEventListener('click', (e) => {
+            const panel = document.getElementById('monitor-panel');
+            if (window.__monitorRunning) {
+                window.__monitorRunning = false;
+                if (window.__monitorInterval) {
+                    clearInterval(window.__monitorInterval);
+                    window.__monitorInterval = null;
+                }
+                toggleAutoCheckbox(false);
+            }
+            panel.style.display = 'none';
+            log('监控面板已关闭，刷新页面可重新加载', 'info');
             e.stopPropagation();
         });
 
