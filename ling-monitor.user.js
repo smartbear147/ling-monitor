@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界自动监控
 // @namespace https://ling.muge.info
-// @version 1.5
+// @version 1.6
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -484,10 +484,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.5';
-
-    // 版本升级时强制覆盖这些配置项为默认值（用点号路径: 'protectors.maxRetries'）
-    const FORCE_OVERRIDE = [];
+    const SCRIPT_VERSION = '1.6';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -505,36 +502,37 @@
         merchant: {
             highPriceThreshold: 7500000,
             stonePriority: ['传说', '史诗', '稀有', '优良', '普通', '极品', '上品', '中品', '下品'],
-            itemKeywords: ['洗炼石', '空白卷轴', '妖丹', '涅槃重生丹'],
+            itemKeywords: ['洗炼石', '空白卷轴', '妖丹', '涅槃重生丹', '太虚道典'],
             fallbackToExpensive: true,
+        },
+        general: {
+            highLevelMeditate: true, // 神识不足时尝试高级冥想
         },
     };
 
     function loadConfig() {
         const defaults = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+        defaults._version = SCRIPT_VERSION;
         const saved = GM_getValue('ling_config', null);
         if (saved) {
             try {
                 const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
+                // 版本升级时直接用脚本默认配置覆盖
+                if (parsed._version !== SCRIPT_VERSION) {
+                    log('脚本版本升级，配置已重置为默认值', 'warn');
+                    saveConfig(defaults);
+                    return defaults;
+                }
                 const result = {
                     ...defaults, ...parsed,
                     protectors: { ...defaults.protectors, ...(parsed.protectors || {}) },
                     merchant: { ...defaults.merchant, ...(parsed.merchant || {}) },
+                    general: { ...defaults.general, ...(parsed.general || {}) },
                 };
-                // 版本升级时强制覆盖指定配置项
-                if (parsed._version !== SCRIPT_VERSION) {
-                    FORCE_OVERRIDE.forEach(path => {
-                        const [section, key] = path.split('.');
-                        if (defaults[section] && key in defaults[section]) {
-                            result[section][key] = JSON.parse(JSON.stringify(defaults[section][key]));
-                        }
-                    });
-                }
                 result._version = SCRIPT_VERSION;
                 return result;
             } catch (e) { /* fallback */ }
         }
-        defaults._version = SCRIPT_VERSION;
         return defaults;
     }
 
@@ -635,7 +633,7 @@
         panel.innerHTML = `
             <div class="mp-gold-line"></div>
             <div id="monitor-header">
-                <span class="mp-header-title">自动监控</span>
+                <span class="mp-header-title">自动监控 v${SCRIPT_VERSION}</span>
                 <div class="mp-header-right">
                     <span id="monitor-status" class="status-stopped">
                         <span class="mp-status-dot"></span>
@@ -895,6 +893,15 @@
             </div>
 
             <div class="cfg-section">
+                <div class="cfg-section-label">通用设置</div>
+                <div class="cfg-row cfg-checkbox-row">
+                    <input id="cfg-highLevelMeditate" type="checkbox" ${cfg.general.highLevelMeditate ? 'checked' : ''}>
+                    <label class="cfg-label" style="margin-bottom:0;">神识不足时尝试高级冥想</label>
+                    <span class="cfg-hint">关闭则直接进入普通冥想并停止脚本</span>
+                </div>
+            </div>
+
+            <div class="cfg-section">
                 <div class="cfg-section-label">商人设置</div>
                 <div class="cfg-row">
                     <label class="cfg-label">高价阈值 (灵石)</label>
@@ -960,6 +967,7 @@
                 config.merchant.stonePriority = document.getElementById('cfg-stonePriority').value.split('|').map(s => s.trim()).filter(Boolean);
                 config.merchant.itemKeywords = document.getElementById('cfg-itemKeywords').value.split('|').map(s => s.trim()).filter(Boolean);
                 config.merchant.fallbackToExpensive = document.getElementById('cfg-fallback').checked;
+                config.general.highLevelMeditate = document.getElementById('cfg-highLevelMeditate').checked;
                 const rows = document.querySelectorAll('#cfg-priority-list .priority-row');
                 const priorities = [];
                 rows.forEach(row => {
@@ -992,6 +1000,7 @@
             document.getElementById(id).addEventListener('change', autoSave);
         });
         document.getElementById('cfg-fallback').addEventListener('change', autoSave);
+        document.getElementById('cfg-highLevelMeditate').addEventListener('change', autoSave);
 
         // 重置
         document.getElementById('cfg-reset').addEventListener('click', () => {
@@ -1441,6 +1450,7 @@
             // 优先级2: 关键词商品（洗炼石、卷轴等，按配置顺序）
             if (!bought) {
                 const itemKeywords = mcfg.itemKeywords || [];
+                // 第一层：找有品质的关键词商品
                 for (const kw of itemKeywords) {
                     for (const quality of mcfg.stonePriority) {
                         const item = allItems.find(i => i.name.includes(quality) && i.name.includes(kw));
@@ -1451,6 +1461,17 @@
                         }
                     }
                     if (bought) break;
+                }
+                // 第二层兜底：找纯关键词商品（无品质前缀）
+                if (!bought) {
+                    for (const kw of itemKeywords) {
+                        const item = allItems.find(i => i.name.includes(kw));
+                        if (item) {
+                            clickBuyItem(item.name);
+                            bought = { ...item, reason: kw };
+                            break;
+                        }
+                    }
                 }
             }
             // 优先级3: 买最贵的
@@ -1474,10 +1495,10 @@
             }
 
             // Log
-            console.log('商人物品列表:');
-            allItems.forEach(item => console.log(` ${item.name} (${item.price}灵石)`));
+            log('商人物品列表:', 'info');
+            allItems.forEach(item => log(` ${item.name} (${item.price}灵石)`, 'info'));
             if (bought) {
-                console.log(`购买: ${bought.name} (${bought.price}灵石) [${bought.reason}]`);
+                log(`购买: ${bought.name} (${bought.price}灵石) [${bought.reason}]`, 'success');
             }
             log('云游商人已处理', 'success');
         } catch (e) {
@@ -1842,48 +1863,55 @@
                 // 检测神识不足（由 showToast 拦截实时设置标志）
                 if (window.__shenshiInsufficient) {
                     window.__shenshiInsufficient = false;
-                    log('检测到神识不足，尝试高级冥想...', 'info');
+                    log('检测到神识不足...', 'info');
 
-                    // 先尝试高级冥想
+                    // 检查是否启用高级冥想
+                    const useHighLevelMeditate = config.general.highLevelMeditate;
                     let instantMeditateOk = false;
-                    try {
-                        const data = await callApi('POST', '/api/game/meditate/instant', { grade: 2 });
-                        if (data && (data.code === 0 || data.code === 200)) {
-                            instantMeditateOk = true;
-                            log('高级冥想成功，点击冥想修炼...', 'success');
-                            await sleep(500);
-                            const medBtnOk = document.getElementById('meditateBtn');
-                            if (medBtnOk && !medBtnOk.classList.contains('meditating')) {
-                                medBtnOk.click();
-                            }
-                            await sleep(500);
-                            const stopBtns = document.querySelectorAll('button');
-                            for (const btn of stopBtns) {
-                                if (btn.textContent.trim() === '收功') {
-                                    btn.click();
-                                    log('已点击收功', 'action');
-                                    break;
+
+                    if (useHighLevelMeditate) {
+                        log('尝试高级冥想...', 'info');
+                        try {
+                            const data = await callApi('POST', '/api/game/meditate/instant', { grade: 2 });
+                            if (data && (data.code === 0 || data.code === 200)) {
+                                instantMeditateOk = true;
+                                log('高级冥想成功，点击冥想修炼...', 'success');
+                                await sleep(500);
+                                const medBtnOk = document.getElementById('meditateBtn');
+                                if (medBtnOk && !medBtnOk.classList.contains('meditating')) {
+                                    medBtnOk.click();
                                 }
-                            }
-                            // 轮询等待冥想完全停止
-                            for (let i = 0; i < 20; i++) {
-                                await sleep(1500);
-                                const medBtn = document.getElementById('meditateBtn');
-                                const isMeditating = medBtn && medBtn.classList.contains('meditating');
-                                if (!isMeditating) break;
-                                const sb = document.querySelector('.btn-stop-meditate');
-                                if (sb) {
-                                    log('检测到重新冥想，再次收功...', 'action');
-                                    sb.click();
+                                await sleep(500);
+                                const stopBtns = document.querySelectorAll('button');
+                                for (const btn of stopBtns) {
+                                    if (btn.textContent.trim() === '收功') {
+                                        btn.click();
+                                        log('已点击收功', 'action');
+                                        break;
+                                    }
                                 }
+                                // 轮询等待冥想完全停止
+                                for (let i = 0; i < 20; i++) {
+                                    await sleep(1500);
+                                    const medBtn = document.getElementById('meditateBtn');
+                                    const isMeditating = medBtn && medBtn.classList.contains('meditating');
+                                    if (!isMeditating) break;
+                                    const sb = document.querySelector('.btn-stop-meditate');
+                                    if (sb) {
+                                        log('检测到重新冥想，再次收功...', 'action');
+                                        sb.click();
+                                    }
+                                }
+                                toggleAutoCheckbox(true);
+                                log('已勾选自动', 'action');
+                            } else {
+                                log('高级冥想失败: ' + (data?.message || '未知原因') + '，转为冥想修炼', 'warn');
                             }
-                            toggleAutoCheckbox(true);
-                            log('已勾选自动', 'action');
-                        } else {
-                            log('高级冥想失败: ' + (data?.message || '未知原因') + '，转为冥想修炼', 'warn');
+                        } catch (e) {
+                            log('高级冥想异常: ' + e.message + '，转为冥想修炼', 'error');
                         }
-                    } catch (e) {
-                        log('高级冥想异常: ' + e.message + '，转为冥想修炼', 'error');
+                    } else {
+                        log('高级冥想已关闭，转为普通冥想...', 'info');
                     }
 
                     if (instantMeditateOk) {
