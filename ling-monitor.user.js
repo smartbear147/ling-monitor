@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界自动监控
 // @namespace https://ling.muge.info
-// @version 1.7
+// @version 1.7.1
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -491,7 +491,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.6';
+    const SCRIPT_VERSION = '1.7.1';
 
     const DEFAULT_CONFIG = {
         protectors: {
