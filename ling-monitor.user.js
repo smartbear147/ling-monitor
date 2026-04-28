@@ -567,6 +567,7 @@
         treasureHunt: {
             batchSize: 0,
             intervalMs: 2000,
+            hireProtector: true,
         },
     };
 
@@ -1504,7 +1505,24 @@
                 thLog(`遭遇 ${m.monsterName} (${m.monsterRealmName}) 攻:${m.monsterAtk} 血:${m.monsterHp}`, 'warn');
                 await sleep(1000);
                 if (!window.__thRunning) break;
-                await hireProtector('treasure');
+
+                if (config.treasureHunt.hireProtector !== false) {
+                    await hireProtector('treasure');
+                } else {
+                    thLog('直接迎战...', 'action');
+                    const fightOverlay = document.getElementById('encounterOverlay');
+                    if (fightOverlay) {
+                        const btns = fightOverlay.querySelectorAll('button');
+                        for (const btn of btns) {
+                            if (btn.textContent.trim() === '迎战') {
+                                btn.click();
+                                break;
+                            }
+                        }
+                    }
+                    await waitForBattleEnd(thLog);
+                }
+
                 if (!window.__thRunning) break;
                 await sleep(1500);
             } else {
@@ -1917,15 +1935,67 @@
             configPanelEl = null;
             return;
         }
+        const activeTab = document.querySelector('.mp-tab.active');
+        const isTreasure = activeTab && activeTab.dataset.tab === 'treasure';
         const panel = document.createElement('div');
         panel.id = 'config-panel';
         const cfg = JSON.parse(JSON.stringify(config));
         panel.innerHTML = `
             <div class="cfg-header">
-                <span class="cfg-title">配置编辑</span>
+                <span class="cfg-title">${isTreasure ? '寻宝配置' : '监控配置'}</span>
                 <span class="cfg-close">&times;</span>
             </div>
 
+            ${isTreasure ? `
+            <div class="cfg-section">
+                <div class="cfg-section-label">护道者设置</div>
+                <div class="cfg-row">
+                    <label class="cfg-label">雇佣模式</label>
+                    <select id="cfg-hireMode">
+                        <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
+                        <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
+                    </select>
+                </div>
+                <div class="cfg-row">
+                    <label class="cfg-label">无空闲护道者时</label>
+                    <select id="cfg-onNoProtector">
+                        <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
+                        <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
+                    </select>
+                </div>
+                <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
+                    <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
+                    <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
+                </div>
+                <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
+                    <label class="cfg-label">逃跑后行为</label>
+                    <select id="cfg-afterEscape">
+                        <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
+                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="cfg-section">
+                <div class="cfg-section-label">护道者优先级（按顺序匹配，按|分隔）</div>
+                <div id="cfg-priority-list" class="priority-list">
+                    ${cfg.protectors.priorities.map((r, i) => {
+                        const isName = !!r.nameMatch;
+                        const keyword = isName ? r.nameMatch : (r.realmMatch || '');
+                        return `<div class="priority-row" draggable="true" data-idx="${i}">
+                            <span class="priority-handle" title="拖拽排序">⠿</span>
+                            <select class="priority-type">
+                                <option value="realm" ${!isName ? 'selected' : ''}>按境界</option>
+                                <option value="name" ${isName ? 'selected' : ''}>按名字</option>
+                            </select>
+                            <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
+                            <span class="priority-del" title="删除">&times;</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+                <div class="priority-add" id="cfg-priority-add">+ 添加规则</div>
+            </div>
+            ` : `
             <div class="cfg-section">
                 <div class="cfg-section-label">护道者设置</div>
                 <div class="cfg-row">
@@ -1987,18 +2057,6 @@
             </div>
 
             <div class="cfg-section">
-                <div class="cfg-section-label">寻宝设置</div>
-                <div class="cfg-row">
-                    <label class="cfg-label">每批使用数量 (0 = 全部用完)</label>
-                    <input id="cfg-th-batchSize" type="number" value="${cfg.treasureHunt.batchSize}">
-                </div>
-                <div class="cfg-row">
-                    <label class="cfg-label">使用间隔 (毫秒)</label>
-                    <input id="cfg-th-intervalMs" type="number" value="${cfg.treasureHunt.intervalMs}">
-                </div>
-            </div>
-
-            <div class="cfg-section">
                 <div class="cfg-section-label">护道者优先级（按顺序匹配，按|分隔）</div>
                 <div id="cfg-priority-list" class="priority-list">
                     ${cfg.protectors.priorities.map((r, i) => {
@@ -2017,6 +2075,24 @@
                 </div>
                 <div class="priority-add" id="cfg-priority-add">+ 添加规则</div>
             </div>
+            `}
+
+            <div class="cfg-section">
+                <div class="cfg-section-label">寻宝设置</div>
+                <div class="cfg-row cfg-checkbox-row">
+                    <input id="cfg-th-hireProtector" type="checkbox" ${cfg.treasureHunt.hireProtector !== false ? 'checked' : ''}>
+                    <label class="cfg-label" style="margin-bottom:0;">遭遇时雇佣护道者</label>
+                    <span class="cfg-hint">关闭则直接迎战</span>
+                </div>
+                <div class="cfg-row">
+                    <label class="cfg-label">每批使用数量 (0 = 全部用完)</label>
+                    <input id="cfg-th-batchSize" type="number" value="${cfg.treasureHunt.batchSize}">
+                </div>
+                <div class="cfg-row">
+                    <label class="cfg-label">使用间隔 (毫秒)</label>
+                    <input id="cfg-th-intervalMs" type="number" value="${cfg.treasureHunt.intervalMs}">
+                </div>
+            </div>
 
             <div class="cfg-bottom-bar">
                 <button id="cfg-reset" class="cfg-btn cfg-btn-reset">重置默认</button>
@@ -2034,28 +2110,33 @@
 
         function autoSave() {
             try {
-                config.protectors.hireMode = document.getElementById('cfg-hireMode').value;
-                config.protectors.onNoProtector = document.getElementById('cfg-onNoProtector').value;
-                config.protectors.fightAttackThreshold = parseInt(document.getElementById('cfg-fightThreshold').value) || 0;
-                config.protectors.afterEscape = document.getElementById('cfg-afterEscape').value;
-                config.merchant.highPriceThreshold = parseInt(document.getElementById('cfg-highPrice').value) || 7500000;
-                config.merchant.stonePriority = document.getElementById('cfg-stonePriority').value.split('|').map(s => s.trim()).filter(Boolean);
-                config.merchant.itemKeywords = document.getElementById('cfg-itemKeywords').value.split('|').map(s => s.trim()).filter(Boolean);
-                config.merchant.fallbackToExpensive = document.getElementById('cfg-fallback').checked;
-                config.general.highLevelMeditate = document.getElementById('cfg-highLevelMeditate').checked;
-                config.treasureHunt.batchSize = parseInt(document.getElementById('cfg-th-batchSize').value) || 0;
-                config.treasureHunt.intervalMs = parseInt(document.getElementById('cfg-th-intervalMs').value) || 2000;
-                const rows = document.querySelectorAll('#cfg-priority-list .priority-row');
-                const priorities = [];
-                rows.forEach(row => {
-                    const type = row.querySelector('.priority-type').value;
-                    const kw = row.querySelector('.priority-keyword').value.trim();
-                    if (!kw) return;
-                    const rule = { sortBy: 'attack', sortOrder: 'desc' };
-                    rule[type === 'name' ? 'nameMatch' : 'realmMatch'] = kw;
-                    priorities.push(rule);
-                });
-                config.protectors.priorities = priorities;
+                const el = id => document.getElementById(id);
+                if (el('cfg-hireMode')) config.protectors.hireMode = el('cfg-hireMode').value;
+                if (el('cfg-onNoProtector')) config.protectors.onNoProtector = el('cfg-onNoProtector').value;
+                if (el('cfg-fightThreshold')) config.protectors.fightAttackThreshold = parseInt(el('cfg-fightThreshold').value) || 0;
+                if (el('cfg-afterEscape')) config.protectors.afterEscape = el('cfg-afterEscape').value;
+                if (el('cfg-highPrice')) config.merchant.highPriceThreshold = parseInt(el('cfg-highPrice').value) || 7500000;
+                if (el('cfg-stonePriority')) config.merchant.stonePriority = el('cfg-stonePriority').value.split('|').map(s => s.trim()).filter(Boolean);
+                if (el('cfg-itemKeywords')) config.merchant.itemKeywords = el('cfg-itemKeywords').value.split('|').map(s => s.trim()).filter(Boolean);
+                if (el('cfg-fallback')) config.merchant.fallbackToExpensive = el('cfg-fallback').checked;
+                if (el('cfg-highLevelMeditate')) config.general.highLevelMeditate = el('cfg-highLevelMeditate').checked;
+                if (el('cfg-th-batchSize')) config.treasureHunt.batchSize = parseInt(el('cfg-th-batchSize').value) || 0;
+                if (el('cfg-th-intervalMs')) config.treasureHunt.intervalMs = parseInt(el('cfg-th-intervalMs').value) || 2000;
+                if (el('cfg-th-hireProtector')) config.treasureHunt.hireProtector = el('cfg-th-hireProtector').checked;
+                const priorityList = el('cfg-priority-list');
+                if (priorityList) {
+                    const rows = priorityList.querySelectorAll('.priority-row');
+                    const priorities = [];
+                    rows.forEach(row => {
+                        const type = row.querySelector('.priority-type').value;
+                        const kw = row.querySelector('.priority-keyword').value.trim();
+                        if (!kw) return;
+                        const rule = { sortBy: 'attack', sortOrder: 'desc' };
+                        rule[type === 'name' ? 'nameMatch' : 'realmMatch'] = kw;
+                        priorities.push(rule);
+                    });
+                    config.protectors.priorities = priorities;
+                }
                 saveConfig(config);
                 monitorLog('配置已保存', 'success');
             } catch (e) {
@@ -2063,17 +2144,21 @@
             }
         }
 
-        document.getElementById('cfg-onNoProtector').addEventListener('change', (e) => {
-            document.getElementById('cfg-fightThreshold-wrap').style.display = e.target.value === 'fight' ? '' : 'none';
-            document.getElementById('cfg-afterEscape-wrap').style.display = e.target.value === 'escape' ? '' : 'none';
-        });
+        const onNoProtectorEl = document.getElementById('cfg-onNoProtector');
+        if (onNoProtectorEl) {
+            onNoProtectorEl.addEventListener('change', (e) => {
+                document.getElementById('cfg-fightThreshold-wrap').style.display = e.target.value === 'fight' ? '' : 'none';
+                document.getElementById('cfg-afterEscape-wrap').style.display = e.target.value === 'escape' ? '' : 'none';
+            });
+        }
 
         ['cfg-hireMode', 'cfg-onNoProtector', 'cfg-afterEscape',
          'cfg-fightThreshold', 'cfg-highPrice', 'cfg-stonePriority',
          'cfg-itemKeywords', 'cfg-fallback', 'cfg-highLevelMeditate',
-         'cfg-th-batchSize', 'cfg-th-intervalMs'
+         'cfg-th-batchSize', 'cfg-th-intervalMs', 'cfg-th-hireProtector'
         ].forEach(id => {
-            document.getElementById(id).addEventListener('change', autoSave);
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', autoSave);
         });
 
         document.getElementById('cfg-reset').addEventListener('click', () => {
@@ -2086,55 +2171,57 @@
 
         const list = document.getElementById('cfg-priority-list');
 
-        function makeRow(keyword, type) {
-            const row = document.createElement('div');
-            row.className = 'priority-row';
-            row.draggable = true;
-            row.innerHTML = `
-                <span class="priority-handle" title="拖拽排序">⠿</span>
-                <select class="priority-type">
-                    <option value="realm" ${type !== 'name' ? 'selected' : ''}>按境界</option>
-                    <option value="name" ${type === 'name' ? 'selected' : ''}>按名字</option>
-                </select>
-                <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
-                <span class="priority-del" title="删除">&times;</span>
-            `;
-            bindRowEvents(row);
-            return row;
-        }
+        if (list) {
+            function makeRow(keyword, type) {
+                const row = document.createElement('div');
+                row.className = 'priority-row';
+                row.draggable = true;
+                row.innerHTML = `
+                    <span class="priority-handle" title="拖拽排序">⠿</span>
+                    <select class="priority-type">
+                        <option value="realm" ${type !== 'name' ? 'selected' : ''}>按境界</option>
+                        <option value="name" ${type === 'name' ? 'selected' : ''}>按名字</option>
+                    </select>
+                    <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
+                    <span class="priority-del" title="删除">&times;</span>
+                `;
+                bindRowEvents(row);
+                return row;
+            }
 
-        function bindRowEvents(row) {
-            row.querySelector('.priority-del').addEventListener('click', () => { row.remove(); autoSave(); });
-            row.querySelector('.priority-type').addEventListener('change', autoSave);
-            row.querySelector('.priority-keyword').addEventListener('change', autoSave);
-            row.addEventListener('dragstart', e => {
-                row.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-            row.addEventListener('dragend', () => { row.classList.remove('dragging'); autoSave(); });
-            row.addEventListener('dragover', e => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                const dragging = list.querySelector('.dragging');
-                if (dragging && dragging !== row) {
-                    const rect = row.getBoundingClientRect();
-                    const mid = rect.top + rect.height / 2;
-                    if (e.clientY < mid) {
-                        list.insertBefore(dragging, row);
-                    } else {
-                        list.insertBefore(dragging, row.nextSibling);
+            function bindRowEvents(row) {
+                row.querySelector('.priority-del').addEventListener('click', () => { row.remove(); autoSave(); });
+                row.querySelector('.priority-type').addEventListener('change', autoSave);
+                row.querySelector('.priority-keyword').addEventListener('change', autoSave);
+                row.addEventListener('dragstart', e => {
+                    row.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                row.addEventListener('dragend', () => { row.classList.remove('dragging'); autoSave(); });
+                row.addEventListener('dragover', e => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const dragging = list.querySelector('.dragging');
+                    if (dragging && dragging !== row) {
+                        const rect = row.getBoundingClientRect();
+                        const mid = rect.top + rect.height / 2;
+                        if (e.clientY < mid) {
+                            list.insertBefore(dragging, row);
+                        } else {
+                            list.insertBefore(dragging, row.nextSibling);
+                        }
                     }
-                }
+                });
+            }
+
+            list.querySelectorAll('.priority-row').forEach(bindRowEvents);
+
+            document.getElementById('cfg-priority-add').addEventListener('click', () => {
+                const row = makeRow('', 'realm');
+                list.appendChild(row);
+                row.querySelector('.priority-keyword').focus();
             });
         }
-
-        list.querySelectorAll('.priority-row').forEach(bindRowEvents);
-
-        document.getElementById('cfg-priority-add').addEventListener('click', () => {
-            const row = makeRow('', 'realm');
-            list.appendChild(row);
-            row.querySelector('.priority-keyword').focus();
-        });
     }
 
     // ==================== 初始化 ====================
