@@ -22,6 +22,6 @@ jobs:
       - name: Push to Gitee
         run: |
           # 添加 Gitee 远程仓库
-          git remote add gitee https://${{ secrets.GITEE_USERNAME }}:${{ secrets.GITEE_PASSWORD }}@gitee.com/smartbear14/ling-monitor.git
+          git remote add gitee https://${{ secrets.GITEE_USERNAME }}:${{ secrets.GITEE_PASSWORD }}@gitee.com/smartbear147/ling-monitor.git
           # 强制推送到 Gitee（注意：这会覆盖 Gitee 端的内容）
           git push -f gitee main:main
