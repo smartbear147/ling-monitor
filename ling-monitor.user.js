@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.2
+// @version 1.8.3
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.2';
+    const SCRIPT_VERSION = '1.8.3';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1521,6 +1521,11 @@
                         }
                     }
                     await waitForBattleEnd(thLog);
+                }
+
+                if (window.__thRunning) {
+                    const tipDismissed = await dismissTipDialog(3000);
+                    if (tipDismissed) thLog('已关闭打赏弹窗', 'info');
                 }
 
                 if (!window.__thRunning) break;
