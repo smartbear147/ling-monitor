@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界自动监控
 // @namespace https://ling.muge.info
-// @version 1.6
+// @version 1.7
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -1864,6 +1864,41 @@
                     dying = true;
                     await handleDeath();
                     dying = false;
+                    return;
+                }
+
+                // Check for arrest overlay (stop monitor)
+                const arrest = document.getElementById('arrestOverlay');
+                if (arrest && !arrest.classList.contains('hidden')) {
+                    log('被逮捕！停止监控', 'error');
+                    window.__monitorRunning = false;
+                    if (window.__monitorInterval) {
+                        clearInterval(window.__monitorInterval);
+                        window.__monitorInterval = null;
+                    }
+                    syncStopUI();
+                    return;
+                }
+
+                // Check for PVP encounter modal
+                const pvp = document.getElementById('pvpEncounterModal');
+                if (pvp && getComputedStyle(pvp).display !== 'none') {
+                    const leaveBtn = pvp.querySelector('.modal-btn--outline');
+                    if (leaveBtn) {
+                        log('遭遇PVP，悄然离去', 'action');
+                        leaveBtn.click();
+                        await sleep(300);
+                        toggleAutoCheckbox(true);
+                    }
+                    return;
+                }
+
+                // Check for announce overlay (auto close)
+                const announce = document.getElementById('announceOverlay');
+                if (announce && !announce.classList.contains('hidden')) {
+                    log('关闭公告弹窗', 'action');
+                    const closeBtn = announce.querySelector('.announce-close, .announce-confirm');
+                    if (closeBtn) closeBtn.click();
                     return;
                 }
 
