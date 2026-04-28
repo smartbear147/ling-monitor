@@ -590,6 +590,31 @@
         return await callApi('GET', '/api/master/overview');
     }
 
+    // 临时拦截 fetch，捕获指定 URL 的 JSON 响应
+    // target: window 或 _uw, urlMatch: URL 匹配子串, filterFn: 可选响应过滤
+    // actionFn: async (getCaptured) => result — getCaptured() 返回当前捕获的响应
+    async function withFetchIntercept(target, urlMatch, filterFn, actionFn) {
+        const origFetch = target.fetch;
+        let captured = null;
+        target.fetch = async function (...args) {
+            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+            const resp = await origFetch.apply(this, args);
+            if (url.includes(urlMatch)) {
+                try {
+                    const clone = resp.clone();
+                    const data = await clone.json();
+                    if (!filterFn || filterFn(data)) captured = data;
+                } catch (e) { }
+            }
+            return resp;
+        };
+        try {
+            return await actionFn(() => captured);
+        } finally {
+            target.fetch = origFetch;
+        }
+    }
+
     // --- Toast 拦截 (用 unsafeWindow 绑定到页面真实 window) ---
     const _uw = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
     window.__lastToast = '';
@@ -605,10 +630,7 @@
         if (originalShowToast) originalShowToast.apply(this, arguments);
     };
 
-    // --- 自动接受原生弹窗 ---
-    window.addEventListener('dialog', function (e) {
-        e.preventDefault();
-    }, true);
+    // --- 自动接受原生弹窗（覆盖 alert/confirm/prompt） ---
     window._origAlert = window.alert;
     window._origConfirm = window.confirm;
     window._origPrompt = window.prompt;
@@ -818,19 +840,8 @@
                         stopBtn.click();
                     }
                     // 轮询等待冥想完全停止（游戏可能自动重新冥想，需要反复收功）
-                    for (let i = 0; i < 20; i++) {
-                        await sleep(1500);
-                        if (!window.__monitorRunning) { syncStopUI(); return; }
-                        const medBtn = document.getElementById('meditateBtn');
-                        const stillMeditating = medBtn && medBtn.classList.contains('meditating');
-                        if (!stillMeditating) break;
-                        const sb = document.querySelector('.btn-stop-meditate');
-                        if (sb) {
-                            log('检测到重新冥想，再次收功...', 'action');
-                            sb.click();
-                        }
-                    }
-                    if (!window.__monitorRunning) { syncStopUI(); return; }
+                    const stopOk = await waitMeditateStop();
+                    if (!stopOk) { syncStopUI(); return; }
                     log('收功完成，启动监控', 'success');
                 }
                 // 收功完毕后才开启自动探索和监控循环
@@ -952,7 +963,7 @@
                 <div id="cfg-priority-list" class="priority-list">
                     ${cfg.protectors.priorities.map((r, i) => {
                         const isName = !!r.nameMatch;
-                        const keyword = isName ? r.nameMatch : (r.realmMatch || r.realmContains || '');
+                        const keyword = isName ? r.nameMatch : (r.realmMatch || '');
                         return `<div class="priority-row" draggable="true" data-idx="${i}">
                             <span class="priority-handle" title="拖拽排序">⠿</span>
                             <select class="priority-type">
@@ -1017,14 +1028,12 @@
         });
 
         // 绑定自动保存事件
-        ['cfg-hireMode', 'cfg-onNoProtector', 'cfg-afterEscape'].forEach(id => {
+        ['cfg-hireMode', 'cfg-onNoProtector', 'cfg-afterEscape',
+         'cfg-fightThreshold', 'cfg-highPrice', 'cfg-stonePriority',
+         'cfg-itemKeywords', 'cfg-fallback', 'cfg-highLevelMeditate'
+        ].forEach(id => {
             document.getElementById(id).addEventListener('change', autoSave);
         });
-        ['cfg-fightThreshold', 'cfg-highPrice', 'cfg-stonePriority', 'cfg-itemKeywords'].forEach(id => {
-            document.getElementById(id).addEventListener('change', autoSave);
-        });
-        document.getElementById('cfg-fallback').addEventListener('change', autoSave);
-        document.getElementById('cfg-highLevelMeditate').addEventListener('change', autoSave);
 
         // 重置
         document.getElementById('cfg-reset').addEventListener('click', () => {
@@ -1154,7 +1163,6 @@
         if (rule.nameMatch && !prot.name.includes(rule.nameMatch)) return false;
         if (rule.excludeName && prot.name.includes(rule.excludeName)) return false;
         if (rule.realmMatch && !rule.realmMatch.split('|').some(k => prot.realm.includes(k))) return false;
-        if (rule.realmContains && !prot.realm.includes(rule.realmContains)) return false;
         return true;
     }
 
@@ -1169,7 +1177,7 @@
             }
         }
         for (const rule of priorities) {
-            const realmKey = rule.realmMatch || rule.realmContains;
+            const realmKey = rule.realmMatch;
             const nameKey = rule.nameMatch;
             if (nameKey && nameKey.includes('|')) {
                 for (const keyword of nameKey.split('|')) {
@@ -1269,23 +1277,7 @@
             const candidate = selected[i];
             log(`[尝试${attempt}] 选择: ${candidate.name} ${candidate.realm} 攻击:${candidate.attack} (${candidate.priority})`, 'info');
 
-            // Hook fetch to capture hire response (only intercept hire API)
-            window.__hireResponse = null;
-            const origFetch = window.fetch;
-            window.fetch = async function (...args) {
-                const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-                const resp = await origFetch.apply(this, args);
-                if (url.includes('encounter-hire-protector')) {
-                    try {
-                        const clone = resp.clone();
-                        const data = await clone.json();
-                        window.__hireResponse = data;
-                    } catch (e) { }
-                }
-                return resp;
-            };
-            let resp;
-            try {
+            const resp = await withFetchIntercept(window, 'encounter-hire-protector', null, async (getCaptured) => {
                 // Click the hire button based on config (协同 or 单独)
                 if (items[candidate.index]) {
                     const btns = items[candidate.index].querySelectorAll('.prot-btn');
@@ -1308,13 +1300,10 @@
                     }
                 }
                 await sleep(800);
-                if (!window.__monitorRunning) return false;
-
-                resp = window.__hireResponse;
-            } finally {
-                window.fetch = origFetch;
-                window.__hireResponse = null;
-            }
+                if (!window.__monitorRunning) return null;
+                return getCaptured();
+            });
+            if (!window.__monitorRunning) return false;
             let hireResult;
             if (!resp) {
                 hireResult = { status: 'no_response' };
@@ -1590,6 +1579,49 @@
         return false;
     }
 
+    // --- 等待冥想完全停止（收功轮询） ---
+    async function waitMeditateStop() {
+        for (let i = 0; i < 20; i++) {
+            await sleep(1500);
+            if (!window.__monitorRunning) return false;
+            const medBtn = document.getElementById('meditateBtn');
+            if (!(medBtn && medBtn.classList.contains('meditating'))) return true;
+            const sb = document.querySelector('.btn-stop-meditate');
+            if (sb) {
+                log('检测到重新冥想，再次收功...', 'action');
+                sb.click();
+            }
+        }
+        return true;
+    }
+
+    // --- 逃跑后处理（冥想停止 or 继续监控） ---
+    function handleEscapeResult(escaped, reason) {
+        if (!escaped) {
+            log('逃跑失败，继续监控...', 'warn');
+            return;
+        }
+        if (config.protectors.afterEscape === 'stop') {
+            log('逃跑成功！点击冥想修炼...', 'success');
+            const btns = document.querySelectorAll('button');
+            for (const btn of btns) {
+                if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
+                    btn.click();
+                    break;
+                }
+            }
+            log(reason || '已逃跑并进入冥想，脚本停止', 'success');
+            window.__monitorRunning = false;
+            if (window.__monitorInterval) {
+                clearInterval(window.__monitorInterval);
+                window.__monitorInterval = null;
+            }
+            syncStopUI();
+        } else {
+            log('逃跑成功！继续监控...', 'success');
+        }
+    }
+
     // --- 雇佣护道者主流程 ---
     async function hireProtector() {
         if (hiring) return;
@@ -1636,30 +1668,7 @@
                     log('暂无空闲护道者，尝试逃跑...', 'info');
                     const escaped = await tryEscape();
                     if (!window.__monitorRunning) return;
-
-                    if (escaped) {
-                        if (config.protectors.afterEscape === 'stop') {
-                            log('逃跑成功！点击冥想修炼...', 'success');
-                            const btns = document.querySelectorAll('button');
-                            for (const btn of btns) {
-                                if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
-                                    btn.click();
-                                    break;
-                                }
-                            }
-                            log('已逃跑并进入冥想，脚本停止', 'success');
-                            window.__monitorRunning = false;
-                            if (window.__monitorInterval) {
-                                clearInterval(window.__monitorInterval);
-                                window.__monitorInterval = null;
-                            }
-                            syncStopUI();
-                        } else {
-                            log('逃跑成功！继续监控...', 'success');
-                        }
-                    } else {
-                        log('逃跑失败，继续监控...', 'warn');
-                    }
+                    handleEscapeResult(escaped, '已逃跑并进入冥想，脚本停止');
                     return;
                 }
 
@@ -1674,30 +1683,7 @@
                             if (!window.__monitorRunning) return;
                             const escaped = await tryEscape();
                             if (!window.__monitorRunning) return;
-
-                            if (escaped) {
-                                if (config.protectors.afterEscape === 'stop') {
-                                    log('逃跑成功！点击冥想修炼...', 'success');
-                                    const btns = document.querySelectorAll('button');
-                                    for (const btn of btns) {
-                                        if (btn.offsetParent !== null && btn.textContent.trim().includes('冥想修炼')) {
-                                            btn.click();
-                                            break;
-                                        }
-                                    }
-                                    log('妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止', 'success');
-                                    window.__monitorRunning = false;
-                                    if (window.__monitorInterval) {
-                                        clearInterval(window.__monitorInterval);
-                                        window.__monitorInterval = null;
-                                    }
-                                    syncStopUI();
-                                } else {
-                                    log('逃跑成功！继续监控...', 'success');
-                                }
-                            } else {
-                                log('逃跑失败，继续监控...', 'warn');
-                            }
+                            handleEscapeResult(escaped, '妖兽攻击超过阈值，已逃跑并进入冥想，脚本停止');
                             return;
                         }
                     }
@@ -1804,48 +1790,30 @@
         }
         await sleep(1000);
 
-        // Hook _uw.fetch 拦截移动响应
-        window.__moveResponse = null;
-        const origMoveFetch = _uw.fetch;
-        _uw.fetch = async function (...args) {
-            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-            const resp = await origMoveFetch.apply(this, args);
-            if (url.includes('/api/game/move')) {
-                try {
-                    const clone = resp.clone();
-                    const data = await clone.json();
-                    if (data.code === 200 && typeof data.data === 'string') {
-                        window.__moveResponse = data;
-                    }
-                } catch (e) { }
-            }
-            return resp;
-        };
+        await withFetchIntercept(_uw, '/api/game/move',
+            (data) => data.code === 200 && typeof data.data === 'string',
+            async (getCaptured) => {
+                const nodes = document.querySelectorAll('.map-node');
+                if (nodes.length >= 4) {
+                    const nameEl = nodes[3].querySelector('.map-node-name');
+                    const mapName = nameEl ? nameEl.textContent.trim() : '第四个地图';
+                    log(`点击第四个地图: ${mapName}...`, 'action');
+                    nodes[3].click();
+                }
 
-        try {
-            const nodes = document.querySelectorAll('.map-node');
-            if (nodes.length >= 4) {
-                const nameEl = nodes[3].querySelector('.map-node-name');
-                const mapName = nameEl ? nameEl.textContent.trim() : '第四个地图';
-                log(`点击第四个地图: ${mapName}...`, 'action');
-                nodes[3].click();
-            }
+                // 等待移动响应（最多5秒）
+                for (let i = 0; i < 25; i++) {
+                    await sleep(200);
+                    if (getCaptured()) break;
+                }
 
-            // 等待移动响应（最多5秒）
-            for (let i = 0; i < 25; i++) {
-                await sleep(200);
-                if (window.__moveResponse) break;
+                if (getCaptured()) {
+                    log(getCaptured().data, 'success');
+                } else {
+                    log('移动超时，未收到响应', 'warn');
+                }
             }
-
-            if (window.__moveResponse) {
-                log(window.__moveResponse.data, 'success');
-            } else {
-                log('移动超时，未收到响应', 'warn');
-            }
-        } finally {
-            _uw.fetch = origMoveFetch;
-            window.__moveResponse = null;
-        }
+        );
         await sleep(300);
 
         log('死亡后流程完成，继续监控...', 'success');
@@ -1950,17 +1918,7 @@
                                     }
                                 }
                                 // 轮询等待冥想完全停止
-                                for (let i = 0; i < 20; i++) {
-                                    await sleep(1500);
-                                    const medBtn = document.getElementById('meditateBtn');
-                                    const isMeditating = medBtn && medBtn.classList.contains('meditating');
-                                    if (!isMeditating) break;
-                                    const sb = document.querySelector('.btn-stop-meditate');
-                                    if (sb) {
-                                        log('检测到重新冥想，再次收功...', 'action');
-                                        sb.click();
-                                    }
-                                }
+                                await waitMeditateStop();
                                 toggleAutoCheckbox(true);
                                 log('已勾选自动', 'action');
                             } else {
