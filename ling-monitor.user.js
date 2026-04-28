@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.1
+// @version 1.8.2
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -9,8 +9,8 @@
 // @grant GM_addStyle
 // @grant unsafeWindow
 // @run-at document-idle
-// @downloadURL https://gh-proxy.org/https://raw.githubusercontent.com/smartbear147/ling-monitor/refs/heads/main/ling-monitor.user.js
-// @updateURL https://gh-proxy.org/https://raw.githubusercontent.com/smartbear147/ling-monitor/refs/heads/main/ling-monitor.user.js
+// @downloadURL https://gitee.com/smartbear147/ling-monitor/raw/main/ling-monitor.user.js
+// @updateURL https://gitee.com/smartbear147/ling-monitor/raw/main/ling-monitor.user.js
 // ==/UserScript==
 
 (function () {
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.1';
+    const SCRIPT_VERSION = '1.8.2';
 
     const DEFAULT_CONFIG = {
         protectors: {
