@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.0
+// @version 1.8.1
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.0';
+    const SCRIPT_VERSION = '1.8.1';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -2077,7 +2077,7 @@
             </div>
             `}
 
-            <div class="cfg-section">
+            ${isTreasure ? `<div class="cfg-section">
                 <div class="cfg-section-label">寻宝设置</div>
                 <div class="cfg-row cfg-checkbox-row">
                     <input id="cfg-th-hireProtector" type="checkbox" ${cfg.treasureHunt.hireProtector !== false ? 'checked' : ''}>
@@ -2092,7 +2092,7 @@
                     <label class="cfg-label">使用间隔 (毫秒)</label>
                     <input id="cfg-th-intervalMs" type="number" value="${cfg.treasureHunt.intervalMs}">
                 </div>
-            </div>
+            </div>` : ''}
 
             <div class="cfg-bottom-bar">
                 <button id="cfg-reset" class="cfg-btn cfg-btn-reset">重置默认</button>
