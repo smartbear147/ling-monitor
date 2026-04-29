@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.4
+// @version 1.8.5
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.4';
+    const SCRIPT_VERSION = '1.8.5';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -812,6 +812,14 @@
             const o = document.getElementById('encounterOverlay');
             if (o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null && !hiring) {
                 const encounterMode = window.__thRunning ? 'treasure' : 'monitor';
+                if (encounterMode === 'treasure' && config.treasureHunt.hireProtector === false) {
+                    thLog('遭遇妖兽，直接迎战...', 'info');
+                    const btns = o.querySelectorAll('button');
+                    for (const btn of btns) {
+                        if (btn.textContent.trim() === '迎战') { btn.click(); break; }
+                    }
+                    return;
+                }
                 await hireProtector(encounterMode);
                 return;
             }
