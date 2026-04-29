@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.3
+// @version 1.8.4
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.3';
+    const SCRIPT_VERSION = '1.8.4';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -656,6 +656,9 @@
         return await callApi('GET', '/api/master/overview');
     }
 
+    async function getLogs() {
+        return await callApi('GET', '/api/master/overview');
+    }
     async function withFetchIntercept(target, urlMatch, filterFn, actionFn) {
         const origFetch = target.fetch;
         let captured = null;
@@ -729,6 +732,178 @@
             status.className = 'mp-status-line status-stopped';
         }
         window.__thRunning = false;
+    }
+
+    // --- 统一弹窗检查 ---
+    async function checkAllPopups() {
+        // 1. 死亡
+        const d = document.getElementById('deathOverlay');
+        if (d && getComputedStyle(d).display !== 'none' && d.querySelector('.btn-revive') && !dying) {
+            dying = true;
+            await handleDeath();
+            dying = false;
+            return;
+        }
+
+        // 2. 逮捕
+        const arrest = document.getElementById('arrestOverlay');
+        if (arrest && !arrest.classList.contains('hidden')) {
+            if (window.__monitorRunning) {
+                monitorLog('被逮捕！停止监控', 'error');
+                window.__monitorRunning = false;
+                syncStopUI();
+            }
+            if (window.__thRunning) {
+                thLog('被逮捕！停止寻宝', 'error');
+                syncStopTHUI();
+            }
+            stopMainLoop();
+            return;
+        }
+
+        // 3. PVP
+        const pvp = document.getElementById('pvpEncounterModal');
+        if (pvp && getComputedStyle(pvp).display !== 'none') {
+            const leaveBtn = pvp.querySelector('.modal-btn--outline');
+            if (leaveBtn) {
+                const logFn = window.__monitorRunning ? monitorLog : thLog;
+                logFn('遭遇PVP，悄然离去', 'action');
+                leaveBtn.click();
+                await sleep(300);
+                toggleAutoCheckbox(true);
+            }
+            return;
+        }
+
+        // 4. 邀约
+        const invite = document.getElementById('encounterInviteModal');
+        if (invite && getComputedStyle(invite).display !== 'none') {
+            const leaveBtn = invite.querySelector('.modal-btn--outline');
+            if (leaveBtn) {
+                const logFn = window.__monitorRunning ? monitorLog : thLog;
+                logFn('收到邀约，婉言告辞', 'action');
+                leaveBtn.click();
+                await sleep(300);
+                toggleAutoCheckbox(true);
+            }
+            return;
+        }
+
+        // 5. 公告
+        const announce = document.getElementById('announceOverlay');
+        if (announce && !announce.classList.contains('hidden')) {
+            const logFn = window.__monitorRunning ? monitorLog : thLog;
+            logFn('关闭公告弹窗', 'action');
+            const closeBtn = announce.querySelector('.announce-close, .announce-confirm');
+            if (closeBtn) closeBtn.click();
+            return;
+        }
+
+        // 6. 打赏
+        const tipDismissed = await dismissTipDialog(600);
+        if (tipDismissed) {
+            const logFn = window.__monitorRunning ? monitorLog : thLog;
+            logFn('已关闭打赏弹窗', 'info');
+            return;
+        }
+
+        // 7. 遭遇妖兽（两种模式都处理）
+        {
+            const o = document.getElementById('encounterOverlay');
+            if (o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null && !hiring) {
+                const encounterMode = window.__thRunning ? 'treasure' : 'monitor';
+                await hireProtector(encounterMode);
+                return;
+            }
+        }
+
+        // 8. 商人（仅监控模式）
+        if (window.__monitorRunning) {
+            const overlays = document.querySelectorAll('.modal-overlay');
+            for (const overlay of overlays) {
+                if (getComputedStyle(overlay).display === 'none') continue;
+                if (overlay.querySelector('.merchant-item') && overlay.querySelector('#merchantLeaveBtn')) {
+                    if (!shopping) await handleMerchant();
+                    return;
+                }
+            }
+        }
+
+        // 9. 神识不足（仅监控模式）
+        if (window.__monitorRunning && window.__shenshiInsufficient) {
+            window.__shenshiInsufficient = false;
+            monitorLog('检测到神识不足...', 'info');
+
+            const useHighLevelMeditate = config.general.highLevelMeditate;
+            let instantMeditateOk = false;
+
+            if (useHighLevelMeditate) {
+                monitorLog('尝试高级冥想...', 'info');
+                try {
+                    const data = await callApi('POST', '/api/game/meditate/instant', { grade: 2 });
+                    if (data && (data.code === 0 || data.code === 200)) {
+                        instantMeditateOk = true;
+                        monitorLog('高级冥想成功，点击冥想修炼...', 'success');
+                        await sleep(500);
+                        const medBtnOk = document.getElementById('meditateBtn');
+                        if (medBtnOk && !medBtnOk.classList.contains('meditating')) {
+                            medBtnOk.click();
+                        }
+                        await sleep(500);
+                        const stopBtns = document.querySelectorAll('button');
+                        for (const btn of stopBtns) {
+                            if (btn.textContent.trim() === '收功') {
+                                btn.click();
+                                monitorLog('已点击收功', 'action');
+                                break;
+                            }
+                        }
+                        await waitMeditateStop(monitorLog);
+                        toggleAutoCheckbox(true);
+                        monitorLog('已勾选自动', 'action');
+                    } else {
+                        monitorLog('高级冥想失败: ' + (data?.message || '未知原因') + '，转为冥想修炼', 'warn');
+                    }
+                } catch (e) {
+                    monitorLog('高级冥想异常: ' + e.message + '，转为冥想修炼', 'error');
+                }
+            } else {
+                monitorLog('高级冥想已关闭，转为普通冥想...', 'info');
+            }
+
+            if (instantMeditateOk) return;
+
+            if (window._autoExploreRunning) {
+                window.stopAutoExplore('神识不足', false);
+            }
+            const medBtn = document.getElementById('meditateBtn');
+            if (medBtn && !medBtn.classList.contains('meditating')) {
+                medBtn.click();
+            }
+            toggleAutoCheckbox(false);
+            window.__monitorRunning = false;
+            syncStopUI();
+            monitorLog('神识不足，已自动冥想并停止脚本', 'warn');
+            return;
+        }
+    }
+
+    // --- 主循环管理 ---
+    function startMainLoop() {
+        if (window.__mainLoopInterval) return;
+        window.__mainLoopInterval = setInterval(async () => {
+            try {
+                if (!isRunning()) return;
+                await checkAllPopups();
+            } catch (e) { console.error('[灵界助手] 主循环异常:', e); }
+        }, 500);
+    }
+
+    function stopMainLoop() {
+        if (window.__mainLoopInterval) {
+            clearInterval(window.__mainLoopInterval);
+            window.__mainLoopInterval = null;
+        }
     }
 
     // --- 自动勾选"自动"复选框 ---
@@ -1086,7 +1261,7 @@
     }
 
     // --- 等待冥想完全停止 ---
-    async function waitMeditateStop() {
+    async function waitMeditateStop(logFn) {
         for (let i = 0; i < 20; i++) {
             await sleep(1500);
             if (!isRunning()) return false;
@@ -1094,11 +1269,53 @@
             if (!(medBtn && medBtn.classList.contains('meditating'))) return true;
             const sb = document.querySelector('.btn-stop-meditate');
             if (sb) {
-                monitorLog('检测到重新冥想，再次收功...', 'action');
+                if (logFn) logFn('检测到重新冥想，再次收功...', 'action');
                 sb.click();
             }
         }
         return true;
+    }
+
+    // --- 启动前校验（虚空淬体、道韵加成、收功） ---
+    async function preStartCheck(mode) {
+        const logFn = mode === 'monitor' ? monitorLog : thLog;
+
+        const playerInfo = await getPlayerInfo().catch(() => null);
+        if (playerInfo && playerInfo.data) {
+            if (playerInfo.data.voidBodyBuffExpire) {
+                const remain = Math.max(0, Math.round((playerInfo.data.voidBodyBuffExpire - Date.now()) / 1000));
+                const h = Math.floor(remain / 3600);
+                const m = Math.floor((remain % 3600) / 60);
+                const s = remain % 60;
+                logFn(`虚空淬体生效中，倍率 x${playerInfo.data.voidBodyBuffMultiplier}，剩余 ${h}时${m}分${s}秒`, 'success');
+            } else if (!window._origConfirm('当前没有虚空淬体加成，是否继续？')) {
+                return { ok: false };
+            }
+        }
+
+        const masterInfo = await getMasterOverview().catch(() => null);
+        if (masterInfo && masterInfo.data) {
+            if (masterInfo.data.exploreBoostEnabled) {
+                logFn('道韵加成已开启', 'success');
+            } else if (!window._origConfirm('道韵加成未开启，是否继续？')) {
+                return { ok: false };
+            }
+        }
+
+        if (playerInfo && playerInfo.data && playerInfo.data.isMeditating) {
+            const status = document.getElementById(mode === 'monitor' ? 'monitor-status' : 'treasure-status');
+            if (status) status.innerHTML = '<span class="mp-status-dot"></span>收功中...';
+            logFn('正在收功...', 'action');
+
+            const stopBtn = document.querySelector('.btn-stop-meditate');
+            if (stopBtn) stopBtn.click();
+
+            const stopOk = await waitMeditateStop(logFn);
+            if (!stopOk) return { ok: false };
+            logFn('收功完成', 'success');
+        }
+
+        return { ok: true, playerInfo };
     }
 
     // --- 逃跑后处理 ---
@@ -1119,14 +1336,12 @@
                 }
                 monitorLog(reason || '已逃跑并进入冥想，脚本停止', 'success');
                 window.__monitorRunning = false;
-                if (window.__monitorInterval) {
-                    clearInterval(window.__monitorInterval);
-                    window.__monitorInterval = null;
-                }
+                if (!window.__thRunning) stopMainLoop();
                 syncStopUI();
             } else {
                 thLog('逃跑成功，停止寻宝', 'success');
                 syncStopTHUI();
+                if (!window.__monitorRunning) stopMainLoop();
             }
         } else {
             const logFn = mode === 'monitor' ? monitorLog : thLog;
@@ -1138,16 +1353,12 @@
     async function hireProtector(mode = 'monitor') {
         const logFn = mode === 'monitor' ? monitorLog : thLog;
 
-        if (mode === 'monitor') {
-            if (hiring) return;
-            if (!window.__monitorRunning) return;
-            hiring = true;
-            const now = Date.now();
-            if (now - lastEncounterTime < 3000) { hiring = false; return; }
-            lastEncounterTime = now;
-        } else {
-            if (!window.__thRunning) return;
-        }
+        if (hiring) return;
+        if (!isRunning()) return;
+        hiring = true;
+        const now = Date.now();
+        if (now - lastEncounterTime < 3000) { hiring = false; return; }
+        lastEncounterTime = now;
 
         try {
             logFn('遭遇妖兽！开始雇佣流程...', 'info');
@@ -1217,7 +1428,7 @@
                         }
                     }
                 }
-                await waitForBattleEnd(logFn);
+                await waitForBattleEnd();
                 return;
             }
 
@@ -1233,16 +1444,16 @@
                 return;
             }
 
-            await waitForBattleEnd(logFn);
+            await waitForBattleEnd();
+            logFn('战斗结束', 'success');
         } catch (e) {
             logFn('错误: ' + e.message, 'error');
         } finally {
-            if (mode === 'monitor') hiring = false;
+            hiring = false;
         }
     }
 
-    async function waitForBattleEnd(logFn, maxWait = 60000) {
-        logFn('等待战斗结束...', 'action');
+    async function waitForBattleEnd(maxWait = 60000) {
         const battleStart = Date.now();
         while (Date.now() - battleStart < maxWait) {
             if (!isRunning()) return;
@@ -1251,10 +1462,6 @@
             if (!overlayVisible) break;
             await sleep(800);
         }
-        logFn('战斗结束', 'success');
-        if (!isRunning()) return;
-        const tipDismissed = await dismissTipDialog(2000);
-        if (tipDismissed) logFn('已关闭打赏弹窗', 'info');
     }
 
     // --- 商人逻辑 ---
@@ -1425,41 +1632,23 @@
     }
 
     async function useTreasureMap(itemId) {
-        return await withFetchIntercept(_uw, '/api/game/use-item', null, async (getCaptured) => {
-            const eventName = '__thUseItem_' + Date.now();
-            const s = document.createElement('script');
-            s.textContent = `
-                api.request('POST', '/api/game/use-item', {itemId: ${itemId}})
-                .then(r => window.dispatchEvent(new CustomEvent('${eventName}', {detail: JSON.stringify(r)})))
-                .catch(e => window.dispatchEvent(new CustomEvent('${eventName}', {detail: JSON.stringify({code:-1,message:e.message})})));
-            `;
-            document.head.appendChild(s);
-            s.remove();
-            await sleep(1500);
-            return getCaptured();
+        const eventName = '__useItemResult_' + Date.now();
+        return await new Promise((resolve, reject) => {
+            const handler = (e) => {
+                window.removeEventListener(eventName, handler);
+                resolve(e.detail);
+            };
+            window.addEventListener(eventName, handler);
+            const hook = document.createElement('script');
+            hook.textContent = `(async()=>{const _orig=api.post.bind(api);api.post=function(p,b){const r=_orig(p,b);if(p==='/api/game/use-item'){r.then(d=>{api.post=_orig;window.dispatchEvent(new CustomEvent('${eventName}',{detail:d}))}).catch(()=>{api.post=_orig});}return r};try{await useItem(${itemId})}catch(e){api.post=_orig;window.dispatchEvent(new CustomEvent('${eventName}',{detail:{code:-1,message:e.message}}))}})()`;
+            document.head.appendChild(hook);
+            hook.remove();
+            setTimeout(() => { window.removeEventListener(eventName, handler); reject(new Error('超时')); }, 10000);
         });
     }
 
-    async function stopMeditation() {
-        thLog('正在收功...', 'action');
-        const resp = await callApi('POST', '/api/game/meditate/stop');
-        await sleep(1500);
-        if (resp && resp.code === 200) {
-            thLog('收功完成', 'success');
-            return true;
-        }
-        const btn = document.querySelector('.btn-stop-meditate');
-        if (btn) {
-            btn.click();
-            await sleep(1500);
-            thLog('收功完成', 'success');
-            return true;
-        }
-        thLog('收功失败', 'error');
-        return false;
-    }
-
     async function autoTreasureHunt() {
+        const thStartTime = Date.now();
         thLog('=== 开始自动寻宝 ===', 'success');
         let used = 0;
         const batch = config.treasureHunt.batchSize || 999;
@@ -1478,13 +1667,24 @@
 
             thLog(`使用藏宝图 (剩余 ${mapInfo.quantity} 张)...`, 'action');
 
-            const playerInfo = await callApi('GET', '/api/player/info?fresh=1');
-            if (playerInfo?.data?.isMeditating) {
-                await stopMeditation();
-                if (!window.__thRunning) break;
+            const medBtn = document.getElementById('meditateBtn');
+            if (medBtn && medBtn.classList.contains('meditating')) {
+                thLog('正在收功...', 'action');
+                const stopBtn = document.querySelector('.btn-stop-meditate');
+                if (stopBtn) stopBtn.click();
+                const stopOk = await waitMeditateStop(thLog);
+                if (!stopOk || !window.__thRunning) break;
+                thLog('收功完成', 'success');
             }
 
-            const result = await useTreasureMap(mapInfo.itemId);
+            let result;
+            try {
+                result = await useTreasureMap(mapInfo.itemId);
+            } catch (e) {
+                thLog(`使用失败: ${e.message}`, 'error');
+                await sleep(intervalMs);
+                continue;
+            }
             if (!window.__thRunning) break;
 
             if (!result || result.code !== 200) {
@@ -1499,190 +1699,46 @@
             }
 
             used++;
+            getLogs().catch(() => {});
 
-            if (result.data?.type === 'encounter') {
-                const m = result.data;
-                thLog(`遭遇 ${m.monsterName} (${m.monsterRealmName}) 攻:${m.monsterAtk} 血:${m.monsterHp}`, 'warn');
-                await sleep(1000);
-                if (!window.__thRunning) break;
-
-                if (config.treasureHunt.hireProtector !== false) {
-                    await hireProtector('treasure');
+            const rd = result?.data;
+            if (rd) {
+                if (rd.type === 'encounter') {
+                    thLog(`进入 ${rd.treasureLevelName || '未知洞府'}`, 'warn');
                 } else {
-                    thLog('直接迎战...', 'action');
-                    const fightOverlay = document.getElementById('encounterOverlay');
-                    if (fightOverlay) {
-                        const btns = fightOverlay.querySelectorAll('button');
-                        for (const btn of btns) {
-                            if (btn.textContent.trim() === '迎战') {
-                                btn.click();
-                                break;
-                            }
-                        }
-                    }
-                    await waitForBattleEnd(thLog);
+                    const summary = rd.message || rd.desc || rd.text || (typeof rd === 'string' ? rd : JSON.stringify(rd));
+                    thLog(`结果: ${summary}`, 'success');
                 }
+            }
 
-                if (window.__thRunning) {
-                    const tipDismissed = await dismissTipDialog(3000);
-                    if (tipDismissed) thLog('已关闭打赏弹窗', 'info');
-                }
-
+            await sleep(500);
+            const o = document.getElementById('encounterOverlay');
+            if (o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null) {
+                const name = document.getElementById('encounterMonsterName')?.textContent || '';
+                const realm = document.getElementById('encounterMonsterRealm')?.textContent || '';
+                const atk = document.getElementById('encounterMonsterAtk')?.textContent || '';
+                const hp = document.getElementById('encounterMonsterHp')?.textContent || '';
+                thLog(`遭遇 ${name} (${realm}) 攻:${atk} 血:${hp}`, 'warn');
+                await waitForBattleEnd();
                 if (!window.__thRunning) break;
-                await sleep(1500);
             } else {
-                thLog(`寻宝完成: ${result.data}`, 'success');
+                thLog('寻宝完成', 'success');
             }
 
             if (!window.__thRunning) break;
             await sleep(intervalMs);
         }
 
-        thLog(`=== 寻宝结束，共使用 ${used} 张藏宝图 ===`, 'success');
+        const elapsed = Math.round((Date.now() - thStartTime) / 1000);
+        const em = Math.floor(elapsed / 60), es = elapsed % 60;
+        thLog(`=== 寻宝结束，共使用 ${used} 张藏宝图，耗时 ${em}分${es}秒 ===`, 'success');
+        const medBtn = document.getElementById('meditateBtn');
+        if (medBtn && !medBtn.classList.contains('meditating')) {
+            medBtn.click();
+            thLog('已进入冥想', 'success');
+        }
         syncStopTHUI();
-    }
-
-    // ==================== 主监控循环 ====================
-
-    function startMonitorLoop() {
-        window.__monitorInterval = setInterval(async () => {
-            try {
-                if (!window.__monitorRunning) return;
-
-                const d = document.getElementById('deathOverlay');
-                if (d && getComputedStyle(d).display !== 'none' && d.querySelector('.btn-revive') && !dying) {
-                    dying = true;
-                    await handleDeath();
-                    dying = false;
-                    return;
-                }
-
-                const arrest = document.getElementById('arrestOverlay');
-                if (arrest && !arrest.classList.contains('hidden')) {
-                    monitorLog('被逮捕！停止监控', 'error');
-                    window.__monitorRunning = false;
-                    if (window.__monitorInterval) {
-                        clearInterval(window.__monitorInterval);
-                        window.__monitorInterval = null;
-                    }
-                    syncStopUI();
-                    return;
-                }
-
-                const pvp = document.getElementById('pvpEncounterModal');
-                if (pvp && getComputedStyle(pvp).display !== 'none') {
-                    const leaveBtn = pvp.querySelector('.modal-btn--outline');
-                    if (leaveBtn) {
-                        monitorLog('遭遇PVP，悄然离去', 'action');
-                        leaveBtn.click();
-                        await sleep(300);
-                        toggleAutoCheckbox(true);
-                    }
-                    return;
-                }
-
-                const invite = document.getElementById('encounterInviteModal');
-                if (invite && getComputedStyle(invite).display !== 'none') {
-                    const leaveBtn = invite.querySelector('.modal-btn--outline');
-                    if (leaveBtn) {
-                        monitorLog('收到邀约，婉言告辞', 'action');
-                        leaveBtn.click();
-                        await sleep(300);
-                        toggleAutoCheckbox(true);
-                    }
-                    return;
-                }
-
-                const announce = document.getElementById('announceOverlay');
-                if (announce && !announce.classList.contains('hidden')) {
-                    monitorLog('关闭公告弹窗', 'action');
-                    const closeBtn = announce.querySelector('.announce-close, .announce-confirm');
-                    if (closeBtn) closeBtn.click();
-                    return;
-                }
-
-                // 寻宝运行时跳过遭遇处理（由寻宝流程自行处理）
-                if (!window.__thRunning) {
-                    const o = document.getElementById('encounterOverlay');
-                    if (o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null && !hiring) {
-                        await hireProtector('monitor');
-                        return;
-                    }
-                }
-
-                const overlays = document.querySelectorAll('.modal-overlay');
-                for (const overlay of overlays) {
-                    if (getComputedStyle(overlay).display === 'none') continue;
-                    if (overlay.querySelector('.merchant-item') && overlay.querySelector('#merchantLeaveBtn')) {
-                        if (!shopping) await handleMerchant();
-                        return;
-                    }
-                }
-
-                if (window.__shenshiInsufficient) {
-                    window.__shenshiInsufficient = false;
-                    monitorLog('检测到神识不足...', 'info');
-
-                    const useHighLevelMeditate = config.general.highLevelMeditate;
-                    let instantMeditateOk = false;
-
-                    if (useHighLevelMeditate) {
-                        monitorLog('尝试高级冥想...', 'info');
-                        try {
-                            const data = await callApi('POST', '/api/game/meditate/instant', { grade: 2 });
-                            if (data && (data.code === 0 || data.code === 200)) {
-                                instantMeditateOk = true;
-                                monitorLog('高级冥想成功，点击冥想修炼...', 'success');
-                                await sleep(500);
-                                const medBtnOk = document.getElementById('meditateBtn');
-                                if (medBtnOk && !medBtnOk.classList.contains('meditating')) {
-                                    medBtnOk.click();
-                                }
-                                await sleep(500);
-                                const stopBtns = document.querySelectorAll('button');
-                                for (const btn of stopBtns) {
-                                    if (btn.textContent.trim() === '收功') {
-                                        btn.click();
-                                        monitorLog('已点击收功', 'action');
-                                        break;
-                                    }
-                                }
-                                await waitMeditateStop();
-                                toggleAutoCheckbox(true);
-                                monitorLog('已勾选自动', 'action');
-                            } else {
-                                monitorLog('高级冥想失败: ' + (data?.message || '未知原因') + '，转为冥想修炼', 'warn');
-                            }
-                        } catch (e) {
-                            monitorLog('高级冥想异常: ' + e.message + '，转为冥想修炼', 'error');
-                        }
-                    } else {
-                        monitorLog('高级冥想已关闭，转为普通冥想...', 'info');
-                    }
-
-                    if (instantMeditateOk) return;
-
-                    if (window._autoExploreRunning) {
-                        window.stopAutoExplore('神识不足', false);
-                    }
-                    const medBtn = document.getElementById('meditateBtn');
-                    if (medBtn && !medBtn.classList.contains('meditating')) {
-                        medBtn.click();
-                    }
-                    toggleAutoCheckbox(false);
-                    window.__monitorRunning = false;
-                    if (window.__monitorInterval) {
-                        clearInterval(window.__monitorInterval);
-                        window.__monitorInterval = null;
-                    }
-                    syncStopUI();
-                    monitorLog('神识不足，已自动冥想并停止脚本', 'warn');
-                    return;
-                }
-            } catch (e) {
-                /* ignore */
-            }
-        }, 500);
+        if (!window.__monitorRunning) stopMainLoop();
     }
 
     // ==================== 面板 UI ====================
@@ -1812,16 +1868,13 @@
             const panel = document.getElementById('monitor-panel');
             if (window.__monitorRunning) {
                 window.__monitorRunning = false;
-                if (window.__monitorInterval) {
-                    clearInterval(window.__monitorInterval);
-                    window.__monitorInterval = null;
-                }
                 toggleAutoCheckbox(false);
                 syncStopUI();
             }
             if (window.__thRunning) {
                 syncStopTHUI();
             }
+            stopMainLoop();
             panel.style.display = 'none';
             monitorLog('面板已关闭，刷新页面可重新加载', 'info');
             e.stopPropagation();
@@ -1836,46 +1889,14 @@
             const btn = e.target;
             const status = document.getElementById('monitor-status');
             if (window.__monitorRunning) {
-                const playerInfo = await getPlayerInfo().catch(() => null);
-                if (playerInfo && playerInfo.data) {
-                    if (playerInfo.data.voidBodyBuffExpire) {
-                        const remain = Math.max(0, Math.round((playerInfo.data.voidBodyBuffExpire - Date.now()) / 1000));
-                        const h = Math.floor(remain / 3600);
-                        const m = Math.floor((remain % 3600) / 60);
-                        const s = remain % 60;
-                        monitorLog(`虚空淬体生效中，倍率 x${playerInfo.data.voidBodyBuffMultiplier}，剩余 ${h}时${m}分${s}秒`, 'success');
-                    } else if (!window._origConfirm('当前没有虚空淬体加成，是否继续启动监控？')) {
-                        window.__monitorRunning = false;
-                        return;
-                    }
-                }
-                const masterInfo = await getMasterOverview().catch(() => null);
-                if (masterInfo && masterInfo.data) {
-                    if (masterInfo.data.exploreBoostEnabled) {
-                        monitorLog('道韵加成已开启', 'success');
-                    } else if (!window._origConfirm('道韵加成未开启，是否继续启动监控？')) {
-                        window.__monitorRunning = false;
-                        return;
-                    }
-                }
+                const check = await preStartCheck('monitor');
+                if (!check.ok) { window.__monitorRunning = false; return; }
                 btn.textContent = '停止';
                 btn.className = 'mp-btn mp-btn-stop';
                 status.className = 'mp-status-line status-running';
-                const needStopMeditate = playerInfo && playerInfo.data && playerInfo.data.isMeditating;
-                if (needStopMeditate) {
-                    status.innerHTML = '<span class="mp-status-dot"></span>收功中...';
-                    const stopBtn = document.querySelector('.btn-stop-meditate');
-                    if (stopBtn) {
-                        monitorLog('正在收功...', 'action');
-                        stopBtn.click();
-                    }
-                    const stopOk = await waitMeditateStop();
-                    if (!stopOk) { syncStopUI(); return; }
-                    monitorLog('收功完成，启动监控', 'success');
-                }
                 status.innerHTML = '<span class="mp-status-dot"></span>运行中';
                 toggleAutoCheckbox(true);
-                startMonitorLoop();
+                startMainLoop();
                 monitorLog('监控已启动', 'success');
             } else {
                 btn.textContent = '启动';
@@ -1884,10 +1905,8 @@
                 status.className = 'mp-status-line status-stopped';
                 hiring = false;
                 shopping = false;
-                if (window.__monitorInterval) {
-                    clearInterval(window.__monitorInterval);
-                    window.__monitorInterval = null;
-                }
+                window.__monitorRunning = false;
+                if (!window.__thRunning) stopMainLoop();
                 toggleAutoCheckbox(false);
                 monitorLog('监控已暂停', 'warn');
             }
@@ -1895,19 +1914,23 @@
         });
 
         // --- 寻宝启动/停止 ---
-        treasureToggle.addEventListener('click', (e) => {
+        treasureToggle.addEventListener('click', async (e) => {
             if (window.__thRunning) {
                 window.__thRunning = false;
                 syncStopTHUI();
+                if (!window.__monitorRunning) stopMainLoop();
                 thLog('已停止寻宝', 'warn');
             } else {
                 window.__thRunning = true;
+                const check = await preStartCheck('treasure');
+                if (!check.ok) { window.__thRunning = false; return; }
                 const btn = document.getElementById('treasure-toggle');
                 const status = document.getElementById('treasure-status');
                 btn.textContent = '停止寻宝';
                 btn.className = 'mp-btn mp-btn-treasure-stop';
                 status.innerHTML = '<span class="mp-status-dot"></span>寻宝中';
                 status.className = 'mp-status-line status-running';
+                startMainLoop();
                 autoTreasureHunt();
             }
             e.stopPropagation();
