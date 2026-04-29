@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.9
+// @version 1.8.10
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.9';
+    const SCRIPT_VERSION = '1.8.10';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -615,7 +615,9 @@
             const line = document.createElement('div');
             const cls = type ? ` log-${type}` : '';
             line.className = `mp-log-line${cls}`;
-            line.innerHTML = `<span class="mp-log-time">[${new Date().toLocaleTimeString()}]</span> <span class="mp-log-content">${msg}</span>`;
+            const now = new Date();
+            const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+            line.innerHTML = `<span class="mp-log-time">[${ts}]</span> <span class="mp-log-content">${msg}</span>`;
             const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 30;
             logEl.appendChild(line);
             if (atBottom) logEl.scrollTop = logEl.scrollHeight;
@@ -630,10 +632,39 @@
         return window.__monitorRunning || window.__thRunning;
     }
 
+    function activeLog() {
+        return window.__monitorRunning ? monitorLog : thLog;
+    }
+
+    function isOverlayVisible(id) {
+        const el = document.getElementById(id);
+        return el && getComputedStyle(el).display !== 'none';
+    }
+
+    function clickButtonByText(root, text) {
+        const btns = (root || document).querySelectorAll('button');
+        for (const btn of btns) {
+            if (btn.textContent.trim() === text) { btn.click(); return true; }
+        }
+        return false;
+    }
+
+    async function dismissLeaveModal(overlayId, logMsg) {
+        const overlay = document.getElementById(overlayId);
+        const leaveBtn = overlay?.querySelector('.modal-btn--outline');
+        if (leaveBtn) {
+            activeLog()(logMsg, 'action');
+            leaveBtn.click();
+            await sleep(300);
+            toggleAutoCheckbox(true);
+        }
+    }
+
+    let _apiCallCounter = 0;
     function callApi(method, path, body) {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('API 调用超时')), 10000);
-            const eventName = '__monitorApiResult_' + Date.now();
+            const eventName = '__monitorApiResult_' + (++_apiCallCounter);
             const handler = (e) => {
                 clearTimeout(timeout);
                 window.removeEventListener(eventName, handler);
@@ -657,9 +688,6 @@
         return await callApi('GET', '/api/master/overview');
     }
 
-    async function getLogs() {
-        return await callApi('GET', '/api/master/overview');
-    }
     async function withFetchIntercept(target, urlMatch, filterFn, actionFn) {
         const origFetch = target.fetch;
         let captured = null;
@@ -708,30 +736,19 @@
     let config = loadConfig();
 
     // --- 同步停止状态UI ---
+    function setStoppedUI(btnId, statusId, btnText, btnClass) {
+        const btn = document.getElementById(btnId);
+        const status = document.getElementById(statusId);
+        if (btn) { btn.textContent = btnText; btn.className = btnClass; }
+        if (status) { status.innerHTML = '<span class="mp-status-dot"></span>已停止'; status.className = 'mp-status-line status-stopped'; }
+    }
+
     function syncStopUI() {
-        const btn = document.getElementById('monitor-toggle');
-        const status = document.getElementById('monitor-status');
-        if (btn) {
-            btn.textContent = '启动';
-            btn.className = 'mp-btn mp-btn-start';
-        }
-        if (status) {
-            status.innerHTML = '<span class="mp-status-dot"></span>已停止';
-            status.className = 'mp-status-line status-stopped';
-        }
+        setStoppedUI('monitor-toggle', 'monitor-status', '启动', 'mp-btn mp-btn-start');
     }
 
     function syncStopTHUI() {
-        const btn = document.getElementById('treasure-toggle');
-        const status = document.getElementById('treasure-status');
-        if (btn) {
-            btn.textContent = '寻宝';
-            btn.className = 'mp-btn mp-btn-treasure';
-        }
-        if (status) {
-            status.innerHTML = '<span class="mp-status-dot"></span>已停止';
-            status.className = 'mp-status-line status-stopped';
-        }
+        setStoppedUI('treasure-toggle', 'treasure-status', '寻宝', 'mp-btn mp-btn-treasure');
         window.__thRunning = false;
     }
 
@@ -739,10 +756,9 @@
     async function checkAllPopups() {
         // 1. 死亡
         const d = document.getElementById('deathOverlay');
-        if (d && getComputedStyle(d).display !== 'none' && d.querySelector('.btn-revive') && !dying) {
+        if (isOverlayVisible('deathOverlay') && d.querySelector('.btn-revive') && !dying) {
             dying = true;
-            await handleDeath();
-            dying = false;
+            try { await handleDeath(); } finally { dying = false; }
             return;
         }
 
@@ -763,38 +779,21 @@
         }
 
         // 3. PVP
-        const pvp = document.getElementById('pvpEncounterModal');
-        if (pvp && getComputedStyle(pvp).display !== 'none') {
-            const leaveBtn = pvp.querySelector('.modal-btn--outline');
-            if (leaveBtn) {
-                const logFn = window.__monitorRunning ? monitorLog : thLog;
-                logFn('遭遇PVP，悄然离去', 'action');
-                leaveBtn.click();
-                await sleep(300);
-                toggleAutoCheckbox(true);
-            }
+        if (isOverlayVisible('pvpEncounterModal')) {
+            await dismissLeaveModal('pvpEncounterModal', '遭遇PVP，悄然离去');
             return;
         }
 
         // 4. 邀约
-        const invite = document.getElementById('encounterInviteModal');
-        if (invite && getComputedStyle(invite).display !== 'none') {
-            const leaveBtn = invite.querySelector('.modal-btn--outline');
-            if (leaveBtn) {
-                const logFn = window.__monitorRunning ? monitorLog : thLog;
-                logFn('收到邀约，婉言告辞', 'action');
-                leaveBtn.click();
-                await sleep(300);
-                toggleAutoCheckbox(true);
-            }
+        if (isOverlayVisible('encounterInviteModal')) {
+            await dismissLeaveModal('encounterInviteModal', '收到邀约，婉言告辞');
             return;
         }
 
         // 5. 公告
         const announce = document.getElementById('announceOverlay');
         if (announce && !announce.classList.contains('hidden')) {
-            const logFn = window.__monitorRunning ? monitorLog : thLog;
-            logFn('关闭公告弹窗', 'action');
+            activeLog()('关闭公告弹窗', 'action');
             const closeBtn = announce.querySelector('.announce-close, .announce-confirm');
             if (closeBtn) closeBtn.click();
             return;
@@ -803,46 +802,33 @@
         // 6. 打赏
         const tipDismissed = await dismissTipDialog(600);
         if (tipDismissed) {
-            const logFn = window.__monitorRunning ? monitorLog : thLog;
-            logFn('已关闭打赏弹窗', 'info');
+            activeLog()('已关闭打赏弹窗', 'info');
             return;
         }
 
         // 7. 遭遇妖兽（两种模式都处理）
         {
             const o = document.getElementById('encounterOverlay');
-            if (o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null && !hiring) {
+            if (isOverlayVisible('encounterOverlay') && !hiring) {
                 const encounterMode = window.__thRunning ? 'treasure' : 'monitor';
                 if (encounterMode === 'treasure' && config.treasureHunt.hireProtector === false) {
                     hiring = true;
                     thLog('遭遇妖兽，直接迎战...', 'info');
-                    const btns = o.querySelectorAll('button');
-                    for (const btn of btns) {
-                        if (btn.textContent.trim() === '迎战') { btn.click(); break; }
-                    }
+                    clickButtonByText(o, '迎战');
                     return;
                 }
                 await hireProtector(encounterMode);
                 return;
             }
-            if (hiring) {
-                const o2 = document.getElementById('encounterOverlay');
-                if (!o2 || getComputedStyle(o2).display === 'none' || o2.offsetParent === null) {
-                    hiring = false;
-                }
+            if (hiring && !isOverlayVisible('encounterOverlay')) {
+                hiring = false;
             }
         }
 
-        // 8. 商人（仅监控模式）
-        if (window.__monitorRunning) {
-            const overlays = document.querySelectorAll('.modal-overlay');
-            for (const overlay of overlays) {
-                if (getComputedStyle(overlay).display === 'none') continue;
-                if (overlay.querySelector('.merchant-item') && overlay.querySelector('#merchantLeaveBtn')) {
-                    if (!shopping) await handleMerchant();
-                    return;
-                }
-            }
+        // 8. 商人
+        if (isRunning() && isOverlayVisible('merchantOverlay')) {
+            if (!shopping) await handleMerchant();
+            return;
         }
 
         // 9. 神识不足（仅监控模式）
@@ -866,13 +852,8 @@
                             medBtnOk.click();
                         }
                         await sleep(500);
-                        const stopBtns = document.querySelectorAll('button');
-                        for (const btn of stopBtns) {
-                            if (btn.textContent.trim() === '收功') {
-                                btn.click();
-                                monitorLog('已点击收功', 'action');
-                                break;
-                            }
+                        if (clickButtonByText(document, '收功')) {
+                            monitorLog('已点击收功', 'action');
                         }
                         await waitMeditateStop(monitorLog);
                         toggleAutoCheckbox(true);
@@ -929,14 +910,9 @@
             if (label.textContent.trim() === '自动') {
                 const parent = label.closest('label') || label.parentElement;
                 const checkbox = parent ? parent.querySelector('input[type="checkbox"]') : null;
-                if (checkbox) {
-                    if (enable && !checkbox.checked) {
-                        checkbox.checked = true;
-                        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                    } else if (!enable && checkbox.checked) {
-                        checkbox.checked = false;
-                        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
+                if (checkbox && checkbox.checked !== enable) {
+                    checkbox.checked = enable;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }
         }
@@ -993,14 +969,7 @@
     // --- 辅助: 点击雇佣护道按钮 ---
     function clickHireProtector() {
         const overlay = document.getElementById('encounterOverlay');
-        if (!overlay) return;
-        const btns = overlay.querySelectorAll('button');
-        for (const btn of btns) {
-            if (btn.textContent.trim() === '雇佣护道') {
-                btn.click();
-                return;
-            }
-        }
+        if (overlay) clickButtonByText(overlay, '雇佣护道');
     }
 
     // --- 关闭打赏弹窗 ---
@@ -1089,6 +1058,18 @@
         return result;
     }
 
+    async function refreshAndRecurse(attempt, logFn, retryDelay) {
+        dismissModal();
+        await sleep(retryDelay);
+        if (!isRunning()) return false;
+        clickHireProtector();
+        await sleep(retryDelay);
+        if (!isRunning()) return false;
+        const loaded = await waitForProtectorList(8000);
+        if (loaded === 'timeout') return false;
+        return await findAndHireProtector(attempt + 1, logFn);
+    }
+
     async function findAndHireProtector(attempt, logFn) {
         if (!isRunning()) return false;
         const protectorPriorities = config.protectors.priorities;
@@ -1100,15 +1081,7 @@
             if (!isRunning()) return false;
             if (attempt < maxRetries) {
                 logFn(`[尝试${attempt}] 未找到合适护道者，刷新列表...`, 'action');
-                dismissModal();
-                await sleep(retryDelay);
-                if (!isRunning()) return false;
-                clickHireProtector();
-                await sleep(retryDelay);
-                if (!isRunning()) return false;
-                const loaded = await waitForProtectorList(8000);
-                if (loaded === 'timeout') return false;
-                return await findAndHireProtector(attempt + 1, logFn);
+                return await refreshAndRecurse(attempt, logFn, retryDelay);
             }
             logFn(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`, 'error');
             return false;
@@ -1135,15 +1108,7 @@
             if (!isRunning()) return false;
             if (attempt < maxRetries) {
                 logFn(`[尝试${attempt}] 未找到合适护道者，刷新列表...`, 'action');
-                dismissModal();
-                await sleep(retryDelay);
-                if (!isRunning()) return false;
-                clickHireProtector();
-                await sleep(retryDelay);
-                if (!isRunning()) return false;
-                const loaded = await waitForProtectorList(8000);
-                if (loaded === 'timeout') return false;
-                return await findAndHireProtector(attempt + 1, logFn);
+                return await refreshAndRecurse(attempt, logFn, retryDelay);
             }
             logFn(`[尝试${attempt}] ${maxRetries}次均未找到合适护道者`, 'error');
             return false;
@@ -1223,15 +1188,7 @@
         if (!isRunning()) return false;
         if (attempt < maxRetries) {
             logFn(`[尝试${attempt}] 当前列表所有护道者不可用，刷新...`, 'action');
-            dismissModal();
-            await sleep(retryDelay);
-            if (!isRunning()) return false;
-            clickHireProtector();
-            await sleep(retryDelay);
-            if (!isRunning()) return false;
-            const loaded = await waitForProtectorList(8000);
-            if (loaded === 'timeout') return false;
-            return await findAndHireProtector(attempt + 1, logFn);
+            return await refreshAndRecurse(attempt, logFn, retryDelay);
         }
         logFn(`[尝试${attempt}] ${maxRetries}次尝试均失败`, 'error');
         return false;
@@ -1245,17 +1202,7 @@
             if (!isRunning()) return false;
             monitorLog(`逃跑尝试 ${attempt}/${maxAttempts}...`, 'action');
             const overlay = document.getElementById('encounterOverlay');
-            let clicked = false;
-            if (overlay) {
-                const btns = overlay.querySelectorAll('button');
-                for (const btn of btns) {
-                    if (btn.textContent.trim() === '逃跑') {
-                        btn.click();
-                        clicked = true;
-                        break;
-                    }
-                }
-            }
+            const clicked = overlay ? clickButtonByText(overlay, '逃跑') : false;
             if (!clicked) {
                 monitorLog('未找到逃跑按钮', 'error');
                 return false;
@@ -1263,8 +1210,7 @@
 
             await sleep(800);
             if (!isRunning()) return false;
-            const o = document.getElementById('encounterOverlay');
-            const stillVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
+            const stillVisible = isOverlayVisible('encounterOverlay');
             if (!stillVisible) {
                 monitorLog('逃跑成功！', 'success');
                 return true;
@@ -1296,7 +1242,10 @@
     async function preStartCheck(mode) {
         const logFn = mode === 'monitor' ? monitorLog : thLog;
 
-        const playerInfo = await getPlayerInfo().catch(() => null);
+        const [playerInfo, masterInfo] = await Promise.all([
+            getPlayerInfo().catch(() => null),
+            getMasterOverview().catch(() => null),
+        ]);
         if (playerInfo && playerInfo.data) {
             if (playerInfo.data.voidBodyBuffExpire) {
                 const remain = Math.max(0, Math.round((playerInfo.data.voidBodyBuffExpire - Date.now()) / 1000));
@@ -1309,7 +1258,6 @@
             }
         }
 
-        const masterInfo = await getMasterOverview().catch(() => null);
         if (masterInfo && masterInfo.data) {
             if (masterInfo.data.exploreBoostEnabled) {
                 logFn('道韵加成已开启', 'success');
@@ -1386,14 +1334,7 @@
             }
 
             const overlayBtns = overlay.querySelectorAll('button');
-            let step1 = false;
-            for (const btn of overlayBtns) {
-                if (btn.textContent.trim() === '雇佣护道') {
-                    btn.click();
-                    step1 = true;
-                    break;
-                }
-            }
+            const step1 = clickButtonByText(overlay, '雇佣护道');
             if (!step1) {
                 logFn('未找到雇佣护道按钮', 'error');
                 return;
@@ -1435,15 +1376,7 @@
                 logFn('暂无空闲护道者，选择迎战...', 'info');
                 if (!isRunning()) return;
                 const fightOverlay = document.getElementById('encounterOverlay');
-                if (fightOverlay) {
-                    const btns = fightOverlay.querySelectorAll('button');
-                    for (const btn of btns) {
-                        if (btn.textContent.trim() === '迎战') {
-                            btn.click();
-                            break;
-                        }
-                    }
-                }
+                if (fightOverlay) clickButtonByText(fightOverlay, '迎战');
                 await waitForBattleEnd();
                 return;
             }
@@ -1473,8 +1406,7 @@
         const battleStart = Date.now();
         while (Date.now() - battleStart < maxWait) {
             if (!isRunning()) return;
-            const o = document.getElementById('encounterOverlay');
-            const overlayVisible = o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null;
+            const overlayVisible = isOverlayVisible('encounterOverlay');
             if (!overlayVisible) break;
             await sleep(800);
         }
@@ -1485,11 +1417,11 @@
     let dying = false;
     async function handleMerchant() {
         if (shopping) return;
-        if (!window.__monitorRunning) return;
+        if (!isRunning()) return;
         shopping = true;
         try {
-            monitorLog('遇到云游商人！', 'info');
-            if (!window.__monitorRunning) { shopping = false; return; }
+            activeLog()('遇到云游商人！', 'info');
+            if (!isRunning()) { shopping = false; return; }
             const mcfg = config.merchant;
             const items = document.querySelectorAll('.merchant-item');
             if (items.length === 0) {
@@ -1544,7 +1476,7 @@
                 bought = { ...sorted[0], reason: '最贵物品' };
             }
             if (!bought) {
-                monitorLog('无可购买商品，婉拒告辞', 'info');
+                activeLog()('无可购买商品，婉拒告辞', 'info');
                 const leaveBtn = document.getElementById('merchantLeaveBtn');
                 if (leaveBtn) leaveBtn.click();
             }
@@ -1555,14 +1487,15 @@
                 if (!stillVisible) break;
             }
 
-            monitorLog('商人物品列表:', 'info');
-            allItems.forEach(item => monitorLog(` ${item.name} (${item.price}灵石)`, 'info'));
+            const logFn = activeLog();
+            logFn('商人物品列表:', 'info');
+            allItems.forEach(item => logFn(` ${item.name} (${item.price}灵石)`, 'info'));
             if (bought) {
-                monitorLog(`购买: ${bought.name} (${bought.price}灵石) [${bought.reason}]`, 'success');
+                logFn(`购买: ${bought.name} (${bought.price}灵石) [${bought.reason}]`, 'success');
             }
-            monitorLog('云游商人已处理', 'success');
+            logFn('云游商人已处理', 'success');
         } catch (e) {
-            monitorLog('商人错误: ' + e.message, 'error');
+            activeLog()('商人错误: ' + e.message, 'error');
         }
         shopping = false;
     }
@@ -1717,7 +1650,6 @@
             }
 
             used++;
-            getLogs().catch(() => {});
 
             const rd = result?.data;
             if (rd) {
@@ -1730,8 +1662,7 @@
             }
 
             await sleep(500);
-            const o = document.getElementById('encounterOverlay');
-            if (o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null) {
+            if (isOverlayVisible('encounterOverlay')) {
                 const name = document.getElementById('encounterMonsterName')?.textContent || '';
                 const realm = document.getElementById('encounterMonsterRealm')?.textContent || '';
                 const atk = document.getElementById('encounterMonsterAtk')?.textContent || '';
@@ -1980,6 +1911,59 @@
 
     // ==================== 配置面板 UI ====================
 
+    function renderProtectorSection(cfg) {
+        return `<div class="cfg-section">
+            <div class="cfg-section-label">护道者设置</div>
+            <div class="cfg-row">
+                <label class="cfg-label">雇佣模式</label>
+                <select id="cfg-hireMode">
+                    <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
+                    <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
+                </select>
+            </div>
+            <div class="cfg-row">
+                <label class="cfg-label">无空闲护道者时</label>
+                <select id="cfg-onNoProtector">
+                    <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
+                    <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
+                </select>
+            </div>
+            <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
+                <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
+                <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
+            </div>
+            <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
+                <label class="cfg-label">逃跑后行为</label>
+                <select id="cfg-afterEscape">
+                    <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
+                    <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
+                </select>
+            </div>
+        </div>`;
+    }
+
+    function renderPrioritySection(cfg) {
+        return `<div class="cfg-section">
+            <div class="cfg-section-label">护道者优先级（按顺序匹配，按|分隔）</div>
+            <div id="cfg-priority-list" class="priority-list">
+                ${cfg.protectors.priorities.map((r, i) => {
+                    const isName = !!r.nameMatch;
+                    const keyword = isName ? r.nameMatch : (r.realmMatch || '');
+                    return `<div class="priority-row" draggable="true" data-idx="${i}">
+                        <span class="priority-handle" title="拖拽排序">⠿</span>
+                        <select class="priority-type">
+                            <option value="realm" ${!isName ? 'selected' : ''}>按境界</option>
+                            <option value="name" ${isName ? 'selected' : ''}>按名字</option>
+                        </select>
+                        <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
+                        <span class="priority-del" title="删除">&times;</span>
+                    </div>`;
+                }).join('')}
+            </div>
+            <div class="priority-add" id="cfg-priority-add">+ 添加规则</div>
+        </div>`;
+    }
+
     let configPanelEl = null;
     function toggleConfigPanel() {
         if (configPanelEl) {
@@ -1998,85 +1982,9 @@
                 <span class="cfg-close">&times;</span>
             </div>
 
-            ${isTreasure ? `
-            <div class="cfg-section">
-                <div class="cfg-section-label">护道者设置</div>
-                <div class="cfg-row">
-                    <label class="cfg-label">雇佣模式</label>
-                    <select id="cfg-hireMode">
-                        <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
-                        <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
-                    </select>
-                </div>
-                <div class="cfg-row">
-                    <label class="cfg-label">无空闲护道者时</label>
-                    <select id="cfg-onNoProtector">
-                        <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
-                        <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
-                    </select>
-                </div>
-                <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
-                    <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
-                    <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
-                </div>
-                <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
-                    <label class="cfg-label">逃跑后行为</label>
-                    <select id="cfg-afterEscape">
-                        <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
-                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
-                    </select>
-                </div>
-            </div>
+            ${renderProtectorSection(cfg)}
 
-            <div class="cfg-section">
-                <div class="cfg-section-label">护道者优先级（按顺序匹配，按|分隔）</div>
-                <div id="cfg-priority-list" class="priority-list">
-                    ${cfg.protectors.priorities.map((r, i) => {
-                        const isName = !!r.nameMatch;
-                        const keyword = isName ? r.nameMatch : (r.realmMatch || '');
-                        return `<div class="priority-row" draggable="true" data-idx="${i}">
-                            <span class="priority-handle" title="拖拽排序">⠿</span>
-                            <select class="priority-type">
-                                <option value="realm" ${!isName ? 'selected' : ''}>按境界</option>
-                                <option value="name" ${isName ? 'selected' : ''}>按名字</option>
-                            </select>
-                            <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
-                            <span class="priority-del" title="删除">&times;</span>
-                        </div>`;
-                    }).join('')}
-                </div>
-                <div class="priority-add" id="cfg-priority-add">+ 添加规则</div>
-            </div>
-            ` : `
-            <div class="cfg-section">
-                <div class="cfg-section-label">护道者设置</div>
-                <div class="cfg-row">
-                    <label class="cfg-label">雇佣模式</label>
-                    <select id="cfg-hireMode">
-                        <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
-                        <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
-                    </select>
-                </div>
-                <div class="cfg-row">
-                    <label class="cfg-label">无空闲护道者时</label>
-                    <select id="cfg-onNoProtector">
-                        <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
-                        <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
-                    </select>
-                </div>
-                <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
-                    <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
-                    <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
-                </div>
-                <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
-                    <label class="cfg-label">逃跑后行为</label>
-                    <select id="cfg-afterEscape">
-                        <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
-                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
-                    </select>
-                </div>
-            </div>
-
+            ${isTreasure ? '' : `
             <div class="cfg-section">
                 <div class="cfg-section-label">通用设置</div>
                 <div class="cfg-row cfg-checkbox-row">
@@ -2106,28 +2014,9 @@
                     <label class="cfg-label" style="margin-bottom:0;">无匹配商品时买最贵的</label>
                     <span class="cfg-hint">关闭则无匹配商品时自动婉拒</span>
                 </div>
-            </div>
+            </div>`}
 
-            <div class="cfg-section">
-                <div class="cfg-section-label">护道者优先级（按顺序匹配，按|分隔）</div>
-                <div id="cfg-priority-list" class="priority-list">
-                    ${cfg.protectors.priorities.map((r, i) => {
-                        const isName = !!r.nameMatch;
-                        const keyword = isName ? r.nameMatch : (r.realmMatch || '');
-                        return `<div class="priority-row" draggable="true" data-idx="${i}">
-                            <span class="priority-handle" title="拖拽排序">⠿</span>
-                            <select class="priority-type">
-                                <option value="realm" ${!isName ? 'selected' : ''}>按境界</option>
-                                <option value="name" ${isName ? 'selected' : ''}>按名字</option>
-                            </select>
-                            <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
-                            <span class="priority-del" title="删除">&times;</span>
-                        </div>`;
-                    }).join('')}
-                </div>
-                <div class="priority-add" id="cfg-priority-add">+ 添加规则</div>
-            </div>
-            `}
+            ${renderPrioritySection(cfg)}
 
             ${isTreasure ? `<div class="cfg-section">
                 <div class="cfg-section-label">寻宝设置</div>
