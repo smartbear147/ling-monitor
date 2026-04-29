@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.6
+// @version 1.8.7
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.6';
+    const SCRIPT_VERSION = '1.8.7';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1682,8 +1682,10 @@
 
             thLog(`使用藏宝图 (剩余 ${mapInfo.quantity} 张)...`, 'action');
 
-            const medBtn = document.getElementById('meditateBtn');
-            if (medBtn && medBtn.classList.contains('meditating')) {
+            const playerInfo = await getPlayerInfo().catch(() => null);
+            const isMeditating = (playerInfo && playerInfo.data && playerInfo.data.isMeditating)
+                || (document.getElementById('meditateBtn')?.classList.contains('meditating'));
+            if (isMeditating) {
                 thLog('正在收功...', 'action');
                 const stopBtn = document.querySelector('.btn-stop-meditate');
                 if (stopBtn) stopBtn.click();
