@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.8
+// @version 1.8.9
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.8';
+    const SCRIPT_VERSION = '1.8.9';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1656,7 +1656,7 @@
             };
             window.addEventListener(eventName, handler);
             const hook = document.createElement('script');
-            hook.textContent = `(async()=>{const _orig=api.post.bind(api);api.post=function(p,b){const r=_orig(p,b);if(p==='/api/game/use-item'){r.then(d=>{api.post=_orig;window.dispatchEvent(new CustomEvent('${eventName}',{detail:d}))}).catch(()=>{api.post=_orig});}return r};try{await useItem(${itemId})}catch(e){api.post=_orig;window.dispatchEvent(new CustomEvent('${eventName}',{detail:{code:-1,message:e.message}}))}})()`;
+            hook.textContent = `(async()=>{const _orig=api.post.bind(api);let done=false;api.post=function(p,b){if(p==='/api/game/use-item'&&!done){done=true;api.post=_orig;const r=_orig(p,b);r.then(d=>window.dispatchEvent(new CustomEvent('${eventName}',{detail:d}))).catch(()=>window.dispatchEvent(new CustomEvent('${eventName}',{detail:{code:-1,message:'请求失败'}})));return r}return _orig(p,b)};try{await useItem(${itemId})}catch(e){if(!done){done=true;api.post=_orig;window.dispatchEvent(new CustomEvent('${eventName}',{detail:{code:-1,message:e.message}}))}}})()`;
             document.head.appendChild(hook);
             hook.remove();
             setTimeout(() => { window.removeEventListener(eventName, handler); reject(new Error('超时')); }, 10000);
