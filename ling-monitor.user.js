@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.7
+// @version 1.8.8
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.7';
+    const SCRIPT_VERSION = '1.8.8';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -616,9 +616,10 @@
             const cls = type ? ` log-${type}` : '';
             line.className = `mp-log-line${cls}`;
             line.innerHTML = `<span class="mp-log-time">[${new Date().toLocaleTimeString()}]</span> <span class="mp-log-content">${msg}</span>`;
+            const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 30;
             logEl.appendChild(line);
-            logEl.scrollTop = logEl.scrollHeight;
-            while (logEl.children.length > 50) logEl.removeChild(logEl.firstChild);
+            if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+            while (logEl.children.length > 100) logEl.removeChild(logEl.firstChild);
         };
     }
 
@@ -749,7 +750,7 @@
         const arrest = document.getElementById('arrestOverlay');
         if (arrest && !arrest.classList.contains('hidden')) {
             if (window.__monitorRunning) {
-                monitorLog('被逮捕！停止监控', 'error');
+                monitorLog('被逮捕！停止探索', 'error');
                 window.__monitorRunning = false;
                 syncStopUI();
             }
@@ -1336,7 +1337,7 @@
     // --- 逃跑后处理 ---
     function handleEscapeResult(escaped, reason, mode = 'monitor') {
         if (!escaped) {
-            monitorLog('逃跑失败，继续监控...', 'warn');
+            monitorLog('逃跑失败，继续探索...', 'warn');
             return;
         }
         if (config.protectors.afterEscape === 'stop') {
@@ -1631,7 +1632,7 @@
         );
         await sleep(300);
 
-        monitorLog('死亡后流程完成，继续监控...', 'success');
+        monitorLog('死亡后流程完成，继续探索...', 'success');
         toggleAutoCheckbox(true);
     }
 
@@ -1777,7 +1778,7 @@
             </div>
             <div id="monitor-body">
                 <div class="mp-tab-bar">
-                    <button class="mp-tab active" data-tab="monitor">监控</button>
+                    <button class="mp-tab active" data-tab="monitor">探索</button>
                     <button class="mp-tab" data-tab="treasure">寻宝</button>
                 </div>
                 <div id="tab-monitor" class="mp-tab-content active">
@@ -1920,7 +1921,7 @@
                 status.innerHTML = '<span class="mp-status-dot"></span>运行中';
                 toggleAutoCheckbox(true);
                 startMainLoop();
-                monitorLog('监控已启动', 'success');
+                monitorLog('探索已启动', 'success');
             } else {
                 btn.textContent = '启动';
                 btn.className = 'mp-btn mp-btn-start';
@@ -1931,7 +1932,7 @@
                 window.__monitorRunning = false;
                 if (!window.__thRunning) stopMainLoop();
                 toggleAutoCheckbox(false);
-                monitorLog('监控已暂停', 'warn');
+                monitorLog('探索已暂停', 'warn');
             }
             e.stopPropagation();
         });
@@ -1993,7 +1994,7 @@
         const cfg = JSON.parse(JSON.stringify(config));
         panel.innerHTML = `
             <div class="cfg-header">
-                <span class="cfg-title">${isTreasure ? '寻宝配置' : '监控配置'}</span>
+                <span class="cfg-title">${isTreasure ? '寻宝配置' : '探索配置'}</span>
                 <span class="cfg-close">&times;</span>
             </div>
 
@@ -2022,7 +2023,7 @@
                     <label class="cfg-label">逃跑后行为</label>
                     <select id="cfg-afterEscape">
                         <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
-                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
+                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
                     </select>
                 </div>
             </div>
@@ -2071,7 +2072,7 @@
                     <label class="cfg-label">逃跑后行为</label>
                     <select id="cfg-afterEscape">
                         <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
-                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续监控</option>
+                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
                     </select>
                 </div>
             </div>
@@ -2189,9 +2190,13 @@
                     config.protectors.priorities = priorities;
                 }
                 saveConfig(config);
-                monitorLog('配置已保存', 'success');
+                const activeTab = document.querySelector('.mp-tab.active');
+                const logFn = activeTab && activeTab.dataset.tab === 'treasure' ? thLog : monitorLog;
+                logFn('配置已保存', 'success');
             } catch (e) {
-                monitorLog('配置保存失败: ' + e.message, 'error');
+                const activeTab = document.querySelector('.mp-tab.active');
+                const logFn = activeTab && activeTab.dataset.tab === 'treasure' ? thLog : monitorLog;
+                logFn('配置保存失败: ' + e.message, 'error');
             }
         }
 
