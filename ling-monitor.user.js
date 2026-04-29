@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.5
+// @version 1.8.6
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.5';
+    const SCRIPT_VERSION = '1.8.6';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -813,6 +813,7 @@
             if (o && getComputedStyle(o).display !== 'none' && o.offsetParent !== null && !hiring) {
                 const encounterMode = window.__thRunning ? 'treasure' : 'monitor';
                 if (encounterMode === 'treasure' && config.treasureHunt.hireProtector === false) {
+                    hiring = true;
                     thLog('遭遇妖兽，直接迎战...', 'info');
                     const btns = o.querySelectorAll('button');
                     for (const btn of btns) {
@@ -822,6 +823,12 @@
                 }
                 await hireProtector(encounterMode);
                 return;
+            }
+            if (hiring) {
+                const o2 = document.getElementById('encounterOverlay');
+                if (!o2 || getComputedStyle(o2).display === 'none' || o2.offsetParent === null) {
+                    hiring = false;
+                }
             }
         }
 
@@ -1826,8 +1833,14 @@
         };
         const doDrag = (clientX, clientY) => {
             if (!isDragging) return;
-            panel.style.left = (initialLeft + clientX - startX) + 'px';
-            panel.style.top = (initialTop + clientY - startY) + 'px';
+            let newLeft = initialLeft + clientX - startX;
+            let newTop = initialTop + clientY - startY;
+            const maxLeft = window.innerWidth - panel.offsetWidth;
+            const maxTop = window.innerHeight - panel.offsetHeight;
+            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+            newTop = Math.max(0, Math.min(newTop, maxTop));
+            panel.style.left = newLeft + 'px';
+            panel.style.top = newTop + 'px';
         };
         const endDrag = () => { isDragging = false; };
 
