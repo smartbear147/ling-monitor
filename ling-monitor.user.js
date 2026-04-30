@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.12-beta
+// @version 1.8.13-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -546,7 +546,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.12-beta';
+    const SCRIPT_VERSION = '1.8.13-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1755,79 +1755,90 @@
         const batch = config.treasureHunt.batchSize || Infinity;
         const intervalMs = config.treasureHunt.intervalMs;
 
-        while (window.__thRunning && used < batch) {
-            const mapInfo = await getTreasureMapItemId();
-            if (!mapInfo) {
-                thLog('没有更多藏宝图了', 'warn');
-                break;
-            }
-            if (mapInfo.quantity <= 0) {
-                thLog('藏宝图已用完', 'warn');
-                break;
-            }
-
-            thLog(`使用藏宝图 (剩余 ${mapInfo.quantity} 张)...`, 'action');
-
-            const playerInfo = await getPlayerInfo().catch(() => null);
-            const isMeditating = (playerInfo && playerInfo.data && playerInfo.data.isMeditating)
-                || (document.getElementById('meditateBtn')?.classList.contains('meditating'));
-            if (isMeditating) {
-                thLog('正在收功...', 'action');
-                const stopBtn = document.querySelector('.btn-stop-meditate');
-                if (stopBtn) stopBtn.click();
-                const stopOk = await waitMeditateStop(thLog);
-                if (!stopOk || !window.__thRunning) break;
-                thLog('收功完成', 'success');
-            }
-
-            let result;
-            try {
-                result = await useTreasureMap(mapInfo.itemId);
-            } catch (e) {
-                thLog(`使用失败: ${e.message}`, 'error');
-                await sleep(intervalMs);
-                continue;
-            }
-            if (!window.__thRunning) break;
-
-            if (!result || result.code !== 200) {
-                const errMsg = result?.message || '未知错误';
-                thLog(`使用失败: ${errMsg}`, 'error');
-                if (errMsg.includes('神识不足')) {
-                    thLog('神识不足，停止寻宝', 'warn');
+        try {
+            while (window.__thRunning && used < batch) {
+                let mapInfo;
+                try {
+                    mapInfo = await getTreasureMapItemId();
+                } catch (e) {
+                    thLog(`获取藏宝图失败: ${e.message}`, 'error');
+                    await sleep(intervalMs);
+                    continue;
+                }
+                if (!mapInfo) {
+                    thLog('没有更多藏宝图了', 'warn');
                     break;
                 }
-                await sleep(intervalMs);
-                continue;
-            }
-
-            used++;
-
-            const rd = result?.data;
-            if (rd) {
-                if (rd.type === 'encounter') {
-                    thLog(`进入 ${rd.treasureLevelName || '未知洞府'}`, 'warn');
-                } else {
-                    const summary = rd.message || rd.desc || rd.text || (typeof rd === 'string' ? rd : JSON.stringify(rd));
-                    thLog(`结果: ${summary}`, 'success');
+                if (mapInfo.quantity <= 0) {
+                    thLog('藏宝图已用完', 'warn');
+                    break;
                 }
-            }
 
-            await sleep(500);
-            if (isOverlayVisible('encounterOverlay')) {
-                const name = document.getElementById('encounterMonsterName')?.textContent || '';
-                const realm = document.getElementById('encounterMonsterRealm')?.textContent || '';
-                const atk = document.getElementById('encounterMonsterAtk')?.textContent || '';
-                const hp = document.getElementById('encounterMonsterHp')?.textContent || '';
-                thLog(`遭遇 ${name} (${realm}) 攻:${atk} 血:${hp}`, 'warn');
-                await waitForBattleEnd();
+                thLog(`使用藏宝图 (剩余 ${mapInfo.quantity} 张)...`, 'action');
+
+                const playerInfo = await getPlayerInfo().catch(() => null);
+                const isMeditating = (playerInfo && playerInfo.data && playerInfo.data.isMeditating)
+                    || (document.getElementById('meditateBtn')?.classList.contains('meditating'));
+                if (isMeditating) {
+                    thLog('正在收功...', 'action');
+                    const stopBtn = document.querySelector('.btn-stop-meditate');
+                    if (stopBtn) stopBtn.click();
+                    const stopOk = await waitMeditateStop(thLog);
+                    if (!stopOk || !window.__thRunning) break;
+                    thLog('收功完成', 'success');
+                }
+
+                let result;
+                try {
+                    result = await useTreasureMap(mapInfo.itemId);
+                } catch (e) {
+                    thLog(`使用失败: ${e.message}`, 'error');
+                    await sleep(intervalMs);
+                    continue;
+                }
                 if (!window.__thRunning) break;
-            } else {
-                thLog('寻宝完成', 'success');
-            }
 
-            if (!window.__thRunning) break;
-            await sleep(intervalMs);
+                if (!result || result.code !== 200) {
+                    const errMsg = result?.message || '未知错误';
+                    thLog(`使用失败: ${errMsg}`, 'error');
+                    if (errMsg.includes('神识不足')) {
+                        thLog('神识不足，停止寻宝', 'warn');
+                        break;
+                    }
+                    await sleep(intervalMs);
+                    continue;
+                }
+
+                used++;
+
+                const rd = result?.data;
+                if (rd) {
+                    if (rd.type === 'encounter') {
+                        thLog(`进入 ${rd.treasureLevelName || '未知洞府'}`, 'warn');
+                    } else {
+                        const summary = rd.message || rd.desc || rd.text || (typeof rd === 'string' ? rd : JSON.stringify(rd));
+                        thLog(`结果: ${summary}`, 'success');
+                    }
+                }
+
+                await sleep(500);
+                if (isOverlayVisible('encounterOverlay')) {
+                    const name = document.getElementById('encounterMonsterName')?.textContent || '';
+                    const realm = document.getElementById('encounterMonsterRealm')?.textContent || '';
+                    const atk = document.getElementById('encounterMonsterAtk')?.textContent || '';
+                    const hp = document.getElementById('encounterMonsterHp')?.textContent || '';
+                    thLog(`遭遇 ${name} (${realm}) 攻:${atk} 血:${hp}`, 'warn');
+                    await waitForBattleEnd();
+                    if (!window.__thRunning) break;
+                } else {
+                    thLog('寻宝完成', 'success');
+                }
+
+                if (!window.__thRunning) break;
+                await sleep(intervalMs);
+            }
+        } catch (e) {
+            thLog(`寻宝异常: ${e.message}`, 'error');
         }
 
         const elapsed = Math.round((Date.now() - thStartTime) / 1000);
@@ -2062,7 +2073,7 @@
                 status.innerHTML = '<span class="mp-status-dot"></span>寻宝中';
                 status.className = 'mp-status-line status-running';
                 startMainLoop();
-                autoTreasureHunt();
+                autoTreasureHunt().catch(e => thLog(`寻宝致命错误: ${e.message}`, 'error'));
             }
             e.stopPropagation();
         });
