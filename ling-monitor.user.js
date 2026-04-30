@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.14-beta
+// @version 1.8.15-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -546,7 +546,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.14-beta';
+    const SCRIPT_VERSION = '1.8.15-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1075,7 +1075,7 @@
     }
 
     function matchProtector(prot, rule) {
-        if (rule.nameMatch && !prot.name.includes(rule.nameMatch)) return false;
+        if (rule.nameMatch && !rule.nameMatch.split('|').some(k => prot.name.includes(k))) return false;
         if (rule.excludeName && prot.name.includes(rule.excludeName)) return false;
         if (rule.realmMatch && !rule.realmMatch.split('|').some(k => prot.realm.includes(k))) return false;
         return true;
@@ -1179,14 +1179,19 @@
                     break;
                 }
             }
-            if (priceThreshold > 0 && price > priceThreshold) {
-                logFn(`跳过 ${name}（${realm}），价格${price}超过阈值${priceThreshold}`, 'warn');
-                return;
-            }
             protectors.push({ name, realm, attack, index, price });
         });
 
-        const selected = selectProtectors(protectors, protectorPriorities);
+        let selected = selectProtectors(protectors, protectorPriorities);
+        if (priceThreshold > 0 && selected && selected.length > 0) {
+            selected = selected.filter(p => {
+                if (p.price > priceThreshold) {
+                    logFn(`跳过 ${p.name}（${p.realm}），价格${p.price}超过阈值${priceThreshold}`, 'warn');
+                    return false;
+                }
+                return true;
+            });
+        }
         if (!selected || selected.length === 0) {
             if (!isRunning()) return false;
             if (attempt < maxRetries) {
