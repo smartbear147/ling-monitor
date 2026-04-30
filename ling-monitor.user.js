@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.13-beta
+// @version 1.8.14-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -546,7 +546,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.13-beta';
+    const SCRIPT_VERSION = '1.8.14-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1915,6 +1915,12 @@
                 treasureToggle.style.display = target === 'treasure' ? '' : 'none';
                 const logEl = document.getElementById(target === 'treasure' ? 'treasure-log' : 'monitor-log');
                 if (logEl) logEl.scrollTop = logEl.scrollHeight;
+                if (configPanelEl) {
+                    autoSaveConfig(true);
+                    configPanelEl.remove();
+                    configPanelEl = null;
+                    toggleConfigPanel();
+                }
             });
         });
 
@@ -2156,6 +2162,54 @@
     }
 
     let configPanelEl = null;
+
+    function autoSaveConfig(silent) {
+        try {
+            const el = id => document.getElementById(id);
+            if (el('cfg-hireMode')) config.protectors.hireMode = el('cfg-hireMode').value;
+            if (el('cfg-onNoProtector')) config.protectors.onNoProtector = el('cfg-onNoProtector').value;
+            if (el('cfg-fightThreshold')) config.protectors.fightAttackThreshold = parseInt(el('cfg-fightThreshold').value) || 0;
+            if (el('cfg-hirePriceThreshold')) config.protectors.hirePriceThreshold = parseInt(el('cfg-hirePriceThreshold').value) || 0;
+            if (el('cfg-afterEscape')) config.protectors.afterEscape = el('cfg-afterEscape').value;
+            if (el('cfg-highPrice')) config.merchant.highPriceThreshold = parseInt(el('cfg-highPrice').value) || 7500000;
+            if (el('cfg-stonePriority')) config.merchant.stonePriority = el('cfg-stonePriority').value.split('|').map(s => s.trim()).filter(Boolean);
+            if (el('cfg-itemKeywords')) config.merchant.itemKeywords = el('cfg-itemKeywords').value.split('|').map(s => s.trim()).filter(Boolean);
+            if (el('cfg-fallback')) config.merchant.fallbackToExpensive = el('cfg-fallback').checked;
+            if (el('cfg-highLevelMeditate')) config.general.highLevelMeditate = el('cfg-highLevelMeditate').checked;
+            if (el('cfg-th-batchSize')) config.treasureHunt.batchSize = parseInt(el('cfg-th-batchSize').value) || 0;
+            if (el('cfg-th-intervalMs')) config.treasureHunt.intervalMs = parseInt(el('cfg-th-intervalMs').value) || 2000;
+            if (el('cfg-th-hireProtector')) config.treasureHunt.hireProtector = el('cfg-th-hireProtector').checked;
+            if (el('cfg-dn-enabled')) config.dayNight.enabled = el('cfg-dn-enabled').checked;
+            if (el('cfg-dn-interval')) config.dayNight.checkIntervalSec = Math.max(10, parseInt(el('cfg-dn-interval').value) || 30);
+            if (el('cfg-dn-maxRetries')) config.dayNight.maxMeditateRetries = Math.max(1, parseInt(el('cfg-dn-maxRetries').value) || 3);
+            if (el('cfg-dn-retryInterval')) config.dayNight.meditateRetryIntervalSec = Math.max(1, parseInt(el('cfg-dn-retryInterval').value) || 5);
+            const priorityList = el('cfg-priority-list');
+            if (priorityList) {
+                const rows = priorityList.querySelectorAll('.priority-row');
+                const priorities = [];
+                rows.forEach(row => {
+                    const type = row.querySelector('.priority-type').value;
+                    const kw = row.querySelector('.priority-keyword').value.trim();
+                    if (!kw) return;
+                    const rule = { sortBy: 'attack', sortOrder: 'desc' };
+                    rule[type === 'name' ? 'nameMatch' : 'realmMatch'] = kw;
+                    priorities.push(rule);
+                });
+                config.protectors.priorities = priorities;
+            }
+            saveConfig(config);
+            if (!silent) {
+                const activeTab = document.querySelector('.mp-tab.active');
+                const logFn = activeTab && activeTab.dataset.tab === 'treasure' ? thLog : monitorLog;
+                logFn('配置已保存', 'success');
+            }
+        } catch (e) {
+            const activeTab = document.querySelector('.mp-tab.active');
+            const logFn = activeTab && activeTab.dataset.tab === 'treasure' ? thLog : monitorLog;
+            logFn('配置保存失败: ' + e.message, 'error');
+        }
+    }
+
     function toggleConfigPanel() {
         if (configPanelEl) {
             configPanelEl.remove();
@@ -2261,55 +2315,10 @@
         configPanelEl = panel;
 
         panel.querySelector('.cfg-close').addEventListener('click', () => {
-            autoSave();
+            autoSaveConfig();
             panel.remove();
             configPanelEl = null;
         });
-
-        function autoSave() {
-            try {
-                const el = id => document.getElementById(id);
-                if (el('cfg-hireMode')) config.protectors.hireMode = el('cfg-hireMode').value;
-                if (el('cfg-onNoProtector')) config.protectors.onNoProtector = el('cfg-onNoProtector').value;
-                if (el('cfg-fightThreshold')) config.protectors.fightAttackThreshold = parseInt(el('cfg-fightThreshold').value) || 0;
-                if (el('cfg-hirePriceThreshold')) config.protectors.hirePriceThreshold = parseInt(el('cfg-hirePriceThreshold').value) || 0;
-                if (el('cfg-afterEscape')) config.protectors.afterEscape = el('cfg-afterEscape').value;
-                if (el('cfg-highPrice')) config.merchant.highPriceThreshold = parseInt(el('cfg-highPrice').value) || 7500000;
-                if (el('cfg-stonePriority')) config.merchant.stonePriority = el('cfg-stonePriority').value.split('|').map(s => s.trim()).filter(Boolean);
-                if (el('cfg-itemKeywords')) config.merchant.itemKeywords = el('cfg-itemKeywords').value.split('|').map(s => s.trim()).filter(Boolean);
-                if (el('cfg-fallback')) config.merchant.fallbackToExpensive = el('cfg-fallback').checked;
-                if (el('cfg-highLevelMeditate')) config.general.highLevelMeditate = el('cfg-highLevelMeditate').checked;
-                if (el('cfg-th-batchSize')) config.treasureHunt.batchSize = parseInt(el('cfg-th-batchSize').value) || 0;
-                if (el('cfg-th-intervalMs')) config.treasureHunt.intervalMs = parseInt(el('cfg-th-intervalMs').value) || 2000;
-                if (el('cfg-th-hireProtector')) config.treasureHunt.hireProtector = el('cfg-th-hireProtector').checked;
-                if (el('cfg-dn-enabled')) config.dayNight.enabled = el('cfg-dn-enabled').checked;
-                if (el('cfg-dn-interval')) config.dayNight.checkIntervalSec = Math.max(10, parseInt(el('cfg-dn-interval').value) || 30);
-                if (el('cfg-dn-maxRetries')) config.dayNight.maxMeditateRetries = Math.max(1, parseInt(el('cfg-dn-maxRetries').value) || 3);
-                if (el('cfg-dn-retryInterval')) config.dayNight.meditateRetryIntervalSec = Math.max(1, parseInt(el('cfg-dn-retryInterval').value) || 5);
-                const priorityList = el('cfg-priority-list');
-                if (priorityList) {
-                    const rows = priorityList.querySelectorAll('.priority-row');
-                    const priorities = [];
-                    rows.forEach(row => {
-                        const type = row.querySelector('.priority-type').value;
-                        const kw = row.querySelector('.priority-keyword').value.trim();
-                        if (!kw) return;
-                        const rule = { sortBy: 'attack', sortOrder: 'desc' };
-                        rule[type === 'name' ? 'nameMatch' : 'realmMatch'] = kw;
-                        priorities.push(rule);
-                    });
-                    config.protectors.priorities = priorities;
-                }
-                saveConfig(config);
-                const activeTab = document.querySelector('.mp-tab.active');
-                const logFn = activeTab && activeTab.dataset.tab === 'treasure' ? thLog : monitorLog;
-                logFn('配置已保存', 'success');
-            } catch (e) {
-                const activeTab = document.querySelector('.mp-tab.active');
-                const logFn = activeTab && activeTab.dataset.tab === 'treasure' ? thLog : monitorLog;
-                logFn('配置保存失败: ' + e.message, 'error');
-            }
-        }
 
         const onNoProtectorEl = document.getElementById('cfg-onNoProtector');
         if (onNoProtectorEl) {
@@ -2320,13 +2329,13 @@
         }
 
         ['cfg-hireMode', 'cfg-onNoProtector', 'cfg-afterEscape',
-         'cfg-fightThreshold', 'cfg-highPrice', 'cfg-stonePriority',
+         'cfg-fightThreshold', 'cfg-hirePriceThreshold', 'cfg-highPrice', 'cfg-stonePriority',
          'cfg-itemKeywords', 'cfg-fallback', 'cfg-highLevelMeditate',
          'cfg-th-batchSize', 'cfg-th-intervalMs', 'cfg-th-hireProtector',
          'cfg-dn-enabled', 'cfg-dn-interval', 'cfg-dn-maxRetries', 'cfg-dn-retryInterval'
         ].forEach(id => {
             const el = document.getElementById(id);
-            if (el) el.addEventListener('change', autoSave);
+            if (el) el.addEventListener('change', () => autoSaveConfig());
         });
 
         const dnEnabled = document.getElementById('cfg-dn-enabled');
@@ -2366,14 +2375,14 @@
             }
 
             function bindRowEvents(row) {
-                row.querySelector('.priority-del').addEventListener('click', () => { row.remove(); autoSave(); });
-                row.querySelector('.priority-type').addEventListener('change', autoSave);
-                row.querySelector('.priority-keyword').addEventListener('change', autoSave);
+                row.querySelector('.priority-del').addEventListener('click', () => { row.remove(); autoSaveConfig(); });
+                row.querySelector('.priority-type').addEventListener('change', () => autoSaveConfig());
+                row.querySelector('.priority-keyword').addEventListener('change', () => autoSaveConfig());
                 row.addEventListener('dragstart', e => {
                     row.classList.add('dragging');
                     e.dataTransfer.effectAllowed = 'move';
                 });
-                row.addEventListener('dragend', () => { row.classList.remove('dragging'); autoSave(); });
+                row.addEventListener('dragend', () => { row.classList.remove('dragging'); autoSaveConfig(); });
                 row.addEventListener('dragover', e => {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
