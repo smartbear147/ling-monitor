@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.10
+// @version 1.8.11-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -540,7 +540,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.10';
+    const SCRIPT_VERSION = '1.8.11-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -607,6 +607,10 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    function escapeHTML(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     function createLogFn(logElId) {
         return function (msg, type) {
             console.log(msg);
@@ -617,7 +621,7 @@
             line.className = `mp-log-line${cls}`;
             const now = new Date();
             const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-            line.innerHTML = `<span class="mp-log-time">[${ts}]</span> <span class="mp-log-content">${msg}</span>`;
+            line.innerHTML = `<span class="mp-log-time">[${ts}]</span> <span class="mp-log-content">${escapeHTML(msg)}</span>`;
             const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 30;
             logEl.appendChild(line);
             if (atBottom) logEl.scrollTop = logEl.scrollHeight;
@@ -1583,16 +1587,20 @@
     async function useTreasureMap(itemId) {
         const eventName = '__useItemResult_' + Date.now();
         return await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                window.removeEventListener(eventName, handler);
+                reject(new Error('超时'));
+            }, 11000);
             const handler = (e) => {
+                clearTimeout(timeout);
                 window.removeEventListener(eventName, handler);
                 resolve(e.detail);
             };
             window.addEventListener(eventName, handler);
             const hook = document.createElement('script');
-            hook.textContent = `(async()=>{const _orig=api.post.bind(api);let done=false;api.post=function(p,b){if(p==='/api/game/use-item'&&!done){done=true;api.post=_orig;const r=_orig(p,b);r.then(d=>window.dispatchEvent(new CustomEvent('${eventName}',{detail:d}))).catch(()=>window.dispatchEvent(new CustomEvent('${eventName}',{detail:{code:-1,message:'请求失败'}})));return r}return _orig(p,b)};try{await useItem(${itemId})}catch(e){if(!done){done=true;api.post=_orig;window.dispatchEvent(new CustomEvent('${eventName}',{detail:{code:-1,message:e.message}}))}}})()`;
+            hook.textContent = `(async()=>{const eventName=${JSON.stringify(eventName)};let done=false;let watchdog=null;let restore=()=>{};const emit=(detail)=>window.dispatchEvent(new CustomEvent(eventName,{detail}));const finish=(detail)=>{if(done)return;done=true;if(watchdog)clearTimeout(watchdog);restore();emit(detail)};try{const _post=api.post;const _orig=_post.bind(api);restore=()=>{api.post=_post};watchdog=setTimeout(()=>finish({code:-1,message:'超时'}),10000);api.post=function(p,b){if(p==='/api/game/use-item'&&!done){done=true;if(watchdog)clearTimeout(watchdog);restore();try{const r=_orig(p,b);Promise.resolve(r).then(d=>emit(d)).catch(()=>emit({code:-1,message:'请求失败'}));return r}catch(e){emit({code:-1,message:e.message});throw e}}return _orig(p,b)};await useItem(${JSON.stringify(itemId)})}catch(e){finish({code:-1,message:e.message})}})()`;
             document.head.appendChild(hook);
             hook.remove();
-            setTimeout(() => { window.removeEventListener(eventName, handler); reject(new Error('超时')); }, 10000);
         });
     }
 
@@ -1600,7 +1608,7 @@
         const thStartTime = Date.now();
         thLog('=== 开始自动寻宝 ===', 'success');
         let used = 0;
-        const batch = config.treasureHunt.batchSize || 999;
+        const batch = config.treasureHunt.batchSize || Infinity;
         const intervalMs = config.treasureHunt.intervalMs;
 
         while (window.__thRunning && used < batch) {
@@ -1749,6 +1757,8 @@
                 tabContents.forEach(tc => tc.classList.toggle('active', tc.id === `tab-${target}`));
                 monitorToggle.style.display = target === 'monitor' ? '' : 'none';
                 treasureToggle.style.display = target === 'treasure' ? '' : 'none';
+                const logEl = document.getElementById(target === 'treasure' ? 'treasure-log' : 'monitor-log');
+                if (logEl) logEl.scrollTop = logEl.scrollHeight;
             });
         });
 
@@ -1818,9 +1828,16 @@
             e.stopPropagation();
         });
 
+        window.__monitorRunning = false;
+        window.__thRunning = false;
+        let monitorStartToken = 0;
+        let treasureStartToken = 0;
+
         // --- 关闭面板 ---
         document.getElementById('monitor-close').addEventListener('click', (e) => {
             const panel = document.getElementById('monitor-panel');
+            monitorStartToken++;
+            treasureStartToken++;
             if (window.__monitorRunning) {
                 window.__monitorRunning = false;
                 toggleAutoCheckbox(false);
@@ -1835,16 +1852,15 @@
             e.stopPropagation();
         });
 
-        window.__monitorRunning = false;
-        window.__thRunning = false;
-
         // --- 监控启动/停止 ---
         monitorToggle.addEventListener('click', async (e) => {
-            window.__monitorRunning = !window.__monitorRunning;
             const btn = e.target;
             const status = document.getElementById('monitor-status');
-            if (window.__monitorRunning) {
+            if (!window.__monitorRunning) {
+                window.__monitorRunning = true;
+                const startToken = ++monitorStartToken;
                 const check = await preStartCheck('monitor');
+                if (startToken !== monitorStartToken || !window.__monitorRunning) return;
                 if (!check.ok) { window.__monitorRunning = false; return; }
                 btn.textContent = '停止';
                 btn.className = 'mp-btn mp-btn-stop';
@@ -1854,6 +1870,7 @@
                 startMainLoop();
                 monitorLog('探索已启动', 'success');
             } else {
+                monitorStartToken++;
                 btn.textContent = '启动';
                 btn.className = 'mp-btn mp-btn-start';
                 status.innerHTML = '<span class="mp-status-dot"></span>已停止';
@@ -1871,13 +1888,16 @@
         // --- 寻宝启动/停止 ---
         treasureToggle.addEventListener('click', async (e) => {
             if (window.__thRunning) {
+                treasureStartToken++;
                 window.__thRunning = false;
                 syncStopTHUI();
                 if (!window.__monitorRunning) stopMainLoop();
                 thLog('已停止寻宝', 'warn');
             } else {
                 window.__thRunning = true;
+                const startToken = ++treasureStartToken;
                 const check = await preStartCheck('treasure');
+                if (startToken !== treasureStartToken || !window.__thRunning) return;
                 if (!check.ok) { window.__thRunning = false; return; }
                 const btn = document.getElementById('treasure-toggle');
                 const status = document.getElementById('treasure-status');
@@ -1955,7 +1975,7 @@
                             <option value="realm" ${!isName ? 'selected' : ''}>按境界</option>
                             <option value="name" ${isName ? 'selected' : ''}>按名字</option>
                         </select>
-                        <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
+                        <input class="priority-keyword" type="text" value="${escapeHTML(keyword)}" placeholder="关键词">
                         <span class="priority-del" title="删除">&times;</span>
                     </div>`;
                 }).join('')}
@@ -2002,11 +2022,11 @@
                 </div>
                 <div class="cfg-row">
                     <label class="cfg-label">商品关键词 (|分隔，按顺序优先)</label>
-                    <input id="cfg-itemKeywords" type="text" value="${(cfg.merchant.itemKeywords || []).join('|')}">
+                    <input id="cfg-itemKeywords" type="text" value="${escapeHTML((cfg.merchant.itemKeywords || []).join('|'))}">
                 </div>
                 <div class="cfg-row">
                     <label class="cfg-label">品质优先级 (|分隔)</label>
-                    <input id="cfg-stonePriority" type="text" value="${cfg.merchant.stonePriority.join('|')}">
+                    <input id="cfg-stonePriority" type="text" value="${escapeHTML(cfg.merchant.stonePriority.join('|'))}">
                 </div>
                 <div class="cfg-row cfg-hint" style="padding:0;">匹配规则：先按关键词顺序，同关键词按品质优先级，高价物品始终最优先</div>
                 <div class="cfg-row cfg-checkbox-row">
@@ -2127,7 +2147,7 @@
                         <option value="realm" ${type !== 'name' ? 'selected' : ''}>按境界</option>
                         <option value="name" ${type === 'name' ? 'selected' : ''}>按名字</option>
                     </select>
-                    <input class="priority-keyword" type="text" value="${keyword}" placeholder="关键词">
+                    <input class="priority-keyword" type="text" value="${escapeHTML(keyword)}" placeholder="关键词">
                     <span class="priority-del" title="删除">&times;</span>
                 `;
                 bindRowEvents(row);
