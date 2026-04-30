@@ -223,6 +223,12 @@
             0%, 100% { transform: scale(1); opacity: 0.8; }
             50% { transform: scale(1.3); opacity: 1; }
         }
+        .mp-daynight-indicator {
+            margin-left: auto;
+            font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+        }
+        .mp-daynight-indicator.day { color: var(--mp-log-warn); }
+        .mp-daynight-indicator.night { color: var(--mp-log-info); }
 
         /* === 日志区域 === */
         #monitor-log, #treasure-log {
@@ -569,6 +575,12 @@
             intervalMs: 2000,
             hireProtector: true,
         },
+        dayNight: {
+            enabled: false,
+            checkIntervalSec: 30,
+            maxMeditateRetries: 3,
+            meditateRetryIntervalSec: 5,
+        },
     };
 
     function loadConfig() {
@@ -589,6 +601,7 @@
                     merchant: { ...defaults.merchant, ...(parsed.merchant || {}) },
                     general: { ...defaults.general, ...(parsed.general || {}) },
                     treasureHunt: { ...defaults.treasureHunt, ...(parsed.treasureHunt || {}) },
+                    dayNight: { ...defaults.dayNight, ...(parsed.dayNight || {}) },
                 };
                 result._version = SCRIPT_VERSION;
                 return result;
@@ -719,6 +732,14 @@
     window.__lastToast = '';
     window.__lastToastTime = 0;
     window.__shenshiInsufficient = false;
+
+    // --- 昼夜状态 ---
+    const dayNightState = {
+        currentIsDay: null,
+        lastCheckTime: 0,
+        transitioning: false,
+        meditateRetryCount: 0,
+    };
     const originalShowToast = _uw.showToast;
     _uw.showToast = function (msg) {
         window.__lastToast = msg;
@@ -744,7 +765,11 @@
         const btn = document.getElementById(btnId);
         const status = document.getElementById(statusId);
         if (btn) { btn.textContent = btnText; btn.className = btnClass; }
-        if (status) { status.innerHTML = '<span class="mp-status-dot"></span>已停止'; status.className = 'mp-status-line status-stopped'; }
+        if (status) {
+            const extra = statusId === 'monitor-status' ? '<span id="daynight-indicator" class="mp-daynight-indicator" style="display:none;"></span>' : '';
+            status.innerHTML = '<span class="mp-status-dot"></span>已停止' + extra;
+            status.className = 'mp-status-line status-stopped';
+        }
     }
 
     function syncStopUI() {
@@ -833,6 +858,48 @@
         if (isRunning() && isOverlayVisible('merchantOverlay')) {
             if (!shopping) await handleMerchant();
             return;
+        }
+
+        // 8.5. 昼夜自动切换
+        if (window.__monitorRunning && config.dayNight.enabled && !dayNightState.transitioning) {
+            const now = Date.now();
+            const intervalMs = config.dayNight.checkIntervalSec * 1000;
+            if (now - dayNightState.lastCheckTime >= intervalMs) {
+                dayNightState.lastCheckTime = now;
+                if (!hiring && !shopping && !isOverlayVisible('encounterOverlay') && !isOverlayVisible('merchantOverlay')) {
+                    try {
+                        const playerInfo = await getPlayerInfo();
+                        if (playerInfo && playerInfo.data && typeof playerInfo.data.isNight === 'boolean') {
+                            const newIsDay = !playerInfo.data.isNight;
+                            const oldIsDay = dayNightState.currentIsDay;
+                            dayNightState.currentIsDay = newIsDay;
+                            updateDayNightIndicator(newIsDay);
+                            if (oldIsDay !== null && oldIsDay !== newIsDay) {
+                                monitorLog(`昼夜切换: ${oldIsDay ? '白天' : '夜晚'} → ${newIsDay ? '白天' : '夜晚'}`, 'action');
+                                await handleDayNightTransition(newIsDay);
+                            }
+                            if (newIsDay) {
+                                const isMeditating = playerInfo.data.isMeditating
+                                    || document.getElementById('meditateBtn')?.classList.contains('meditating');
+                                if (isMeditating) {
+                                    dayNightState.meditateRetryCount = 0;
+                                } else if (dayNightState.meditateRetryCount < config.dayNight.maxMeditateRetries) {
+                                    dayNightState.meditateRetryCount++;
+                                    const retryIntervalMs = config.dayNight.meditateRetryIntervalSec * 1000;
+                                    dayNightState.lastCheckTime = now - intervalMs + retryIntervalMs;
+                                    monitorLog(`白天未在冥想，重新冥想... (${dayNightState.meditateRetryCount}/${config.dayNight.maxMeditateRetries})`, 'warn');
+                                    await switchToMeditate();
+                                } else if (dayNightState.meditateRetryCount === config.dayNight.maxMeditateRetries) {
+                                    dayNightState.meditateRetryCount++;
+                                    monitorLog(`冥想重试已达上限(${config.dayNight.maxMeditateRetries}次)，不再重试`, 'error');
+                                }
+                            } else {
+                                dayNightState.meditateRetryCount = 0;
+                            }
+                        }
+                    } catch (e) { /* API 失败跳过 */ }
+                }
+            }
         }
 
         // 9. 神识不足（仅监控模式）
@@ -1242,6 +1309,66 @@
         return true;
     }
 
+    // --- 昼夜自动切换 ---
+    function updateDayNightIndicator(isDay) {
+        const el = document.getElementById('daynight-indicator');
+        if (!el) return;
+        if (isDay === null) { el.style.display = 'none'; return; }
+        el.style.display = '';
+        el.className = 'mp-daynight-indicator ' + (isDay ? 'day' : 'night');
+        el.textContent = isDay ? '白天 - 冥想中' : '夜晚 - 探索中';
+    }
+
+    function removeDayNightIndicator() {
+        const el = document.getElementById('daynight-indicator');
+        if (el) el.style.display = 'none';
+    }
+
+    async function switchToExplore() {
+        dayNightState.transitioning = true;
+        try {
+            const medBtn = document.getElementById('meditateBtn');
+            if (medBtn && medBtn.classList.contains('meditating')) {
+                const stopBtn = document.querySelector('.btn-stop-meditate');
+                if (stopBtn) {
+                    stopBtn.click();
+                    monitorLog('收功中...', 'action');
+                    await waitMeditateStop(monitorLog);
+                }
+            }
+            if (!window.__monitorRunning) return;
+            toggleAutoCheckbox(true);
+            monitorLog('夜晚降临，开始探索', 'success');
+            updateDayNightIndicator(false);
+        } finally {
+            dayNightState.transitioning = false;
+        }
+    }
+
+    async function switchToMeditate() {
+        dayNightState.transitioning = true;
+        try {
+            toggleAutoCheckbox(false);
+            if (!window.__monitorRunning) return;
+            const medBtn = document.getElementById('meditateBtn');
+            if (medBtn && !medBtn.classList.contains('meditating')) {
+                medBtn.click();
+                monitorLog('白天到来，进入冥想', 'success');
+            }
+            updateDayNightIndicator(true);
+        } finally {
+            dayNightState.transitioning = false;
+        }
+    }
+
+    async function handleDayNightTransition(newIsDay) {
+        if (newIsDay) {
+            await switchToMeditate();
+        } else {
+            await switchToExplore();
+        }
+    }
+
     // --- 启动前校验（虚空淬体、道韵加成、收功） ---
     async function preStartCheck(mode) {
         const logFn = mode === 'monitor' ? monitorLog : thLog;
@@ -1281,6 +1408,11 @@
             const stopOk = await waitMeditateStop(logFn);
             if (!stopOk) return { ok: false };
             logFn('收功完成', 'success');
+        }
+
+        if (config.dayNight.enabled && playerInfo && playerInfo.data) {
+            dayNightState.currentIsDay = typeof playerInfo.data.isNight === 'boolean' ? !playerInfo.data.isNight : null;
+            dayNightState.lastCheckTime = 0;
         }
 
         return { ok: true, playerInfo };
@@ -1723,6 +1855,7 @@
                 <div id="tab-monitor" class="mp-tab-content active">
                     <div id="monitor-status" class="mp-status-line status-stopped">
                         <span class="mp-status-dot"></span>已停止
+                        <span id="daynight-indicator" class="mp-daynight-indicator" style="display:none;"></span>
                     </div>
                     <div id="monitor-log"></div>
                 </div>
@@ -1865,10 +1998,18 @@
                 btn.textContent = '停止';
                 btn.className = 'mp-btn mp-btn-stop';
                 status.className = 'mp-status-line status-running';
-                status.innerHTML = '<span class="mp-status-dot"></span>运行中';
-                toggleAutoCheckbox(true);
+                status.innerHTML = '<span class="mp-status-dot"></span>运行中<span id="daynight-indicator" class="mp-daynight-indicator" style="display:none;"></span>';
                 startMainLoop();
-                monitorLog('探索已启动', 'success');
+                if (config.dayNight.enabled && dayNightState.currentIsDay === true) {
+                    monitorLog('探索已启动（当前白天，自动冥想）', 'success');
+                    await switchToMeditate();
+                } else {
+                    toggleAutoCheckbox(true);
+                    monitorLog('探索已启动', 'success');
+                    if (config.dayNight.enabled) {
+                        updateDayNightIndicator(dayNightState.currentIsDay);
+                    }
+                }
             } else {
                 monitorStartToken++;
                 btn.textContent = '启动';
@@ -1880,6 +2021,9 @@
                 window.__monitorRunning = false;
                 if (!window.__thRunning) stopMainLoop();
                 toggleAutoCheckbox(false);
+                dayNightState.currentIsDay = null;
+                dayNightState.transitioning = false;
+                removeDayNightIndicator();
                 monitorLog('探索已暂停', 'warn');
             }
             e.stopPropagation();
@@ -2015,6 +2159,32 @@
             </div>
 
             <div class="cfg-section">
+                <div class="cfg-section-label">昼夜自动切换</div>
+                <div class="cfg-row cfg-checkbox-row">
+                    <input id="cfg-dn-enabled" type="checkbox" ${cfg.dayNight.enabled ? 'checked' : ''}>
+                    <label class="cfg-label" style="margin-bottom:0;">启用昼夜自动切换</label>
+                    <span class="cfg-hint">白天冥想，夜晚探索</span>
+                </div>
+                <div id="cfg-dn-settings" style="${cfg.dayNight.enabled ? '' : 'display:none;'}">
+                    <div class="cfg-row">
+                        <label class="cfg-label">检查间隔（秒）</label>
+                        <input id="cfg-dn-interval" type="number" value="${cfg.dayNight.checkIntervalSec}" min="10" max="300">
+                        <span class="cfg-hint">建议 30-60 秒</span>
+                    </div>
+                    <div class="cfg-row">
+                        <label class="cfg-label">冥想最大重试次数</label>
+                        <input id="cfg-dn-maxRetries" type="number" value="${cfg.dayNight.maxMeditateRetries}" min="1" max="10">
+                        <span class="cfg-hint">白天冥想失败时的重试上限</span>
+                    </div>
+                    <div class="cfg-row">
+                        <label class="cfg-label">重试间隔（秒）</label>
+                        <input id="cfg-dn-retryInterval" type="number" value="${cfg.dayNight.meditateRetryIntervalSec}" min="1" max="60">
+                        <span class="cfg-hint">冥想失败后多久重试</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cfg-section">
                 <div class="cfg-section-label">商人设置</div>
                 <div class="cfg-row">
                     <label class="cfg-label">高价阈值 (灵石)</label>
@@ -2084,6 +2254,10 @@
                 if (el('cfg-th-batchSize')) config.treasureHunt.batchSize = parseInt(el('cfg-th-batchSize').value) || 0;
                 if (el('cfg-th-intervalMs')) config.treasureHunt.intervalMs = parseInt(el('cfg-th-intervalMs').value) || 2000;
                 if (el('cfg-th-hireProtector')) config.treasureHunt.hireProtector = el('cfg-th-hireProtector').checked;
+                if (el('cfg-dn-enabled')) config.dayNight.enabled = el('cfg-dn-enabled').checked;
+                if (el('cfg-dn-interval')) config.dayNight.checkIntervalSec = Math.max(10, parseInt(el('cfg-dn-interval').value) || 30);
+                if (el('cfg-dn-maxRetries')) config.dayNight.maxMeditateRetries = Math.max(1, parseInt(el('cfg-dn-maxRetries').value) || 3);
+                if (el('cfg-dn-retryInterval')) config.dayNight.meditateRetryIntervalSec = Math.max(1, parseInt(el('cfg-dn-retryInterval').value) || 5);
                 const priorityList = el('cfg-priority-list');
                 if (priorityList) {
                     const rows = priorityList.querySelectorAll('.priority-row');
@@ -2120,11 +2294,20 @@
         ['cfg-hireMode', 'cfg-onNoProtector', 'cfg-afterEscape',
          'cfg-fightThreshold', 'cfg-highPrice', 'cfg-stonePriority',
          'cfg-itemKeywords', 'cfg-fallback', 'cfg-highLevelMeditate',
-         'cfg-th-batchSize', 'cfg-th-intervalMs', 'cfg-th-hireProtector'
+         'cfg-th-batchSize', 'cfg-th-intervalMs', 'cfg-th-hireProtector',
+         'cfg-dn-enabled', 'cfg-dn-interval', 'cfg-dn-maxRetries', 'cfg-dn-retryInterval'
         ].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('change', autoSave);
         });
+
+        const dnEnabled = document.getElementById('cfg-dn-enabled');
+        if (dnEnabled) {
+            dnEnabled.addEventListener('change', (e) => {
+                const settings = document.getElementById('cfg-dn-settings');
+                if (settings) settings.style.display = e.target.checked ? '' : 'none';
+            });
+        }
 
         document.getElementById('cfg-reset').addEventListener('click', () => {
             config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
