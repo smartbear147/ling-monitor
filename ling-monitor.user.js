@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.11-beta
+// @version 1.8.12-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -546,7 +546,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.11-beta';
+    const SCRIPT_VERSION = '1.8.12-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -559,6 +559,7 @@
             hireMode: 'together',
             onNoProtector: 'escape',
             fightAttackThreshold: 0,
+            hirePriceThreshold: 2000,
             afterEscape: 'stop',
         },
         merchant: {
@@ -590,11 +591,6 @@
         if (saved) {
             try {
                 const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
-                if (parsed._version !== SCRIPT_VERSION) {
-                    monitorLog('脚本版本升级，配置已重置为默认值', 'warn');
-                    saveConfig(defaults);
-                    return defaults;
-                }
                 const result = {
                     ...defaults, ...parsed,
                     protectors: { ...defaults.protectors, ...(parsed.protectors || {}) },
@@ -1158,6 +1154,8 @@
             return false;
         }
 
+        const priceThreshold = config.protectors.hirePriceThreshold || 0;
+        const wantSolo = config.protectors.hireMode === 'solo';
         const protectors = [];
         items.forEach((item, index) => {
             const nameEl = item.querySelector('.prot-name');
@@ -1171,7 +1169,21 @@
                 const atkMatch = statsEl.textContent.match(/攻\s*(\d+)/);
                 if (atkMatch) attack = parseInt(atkMatch[1]);
             }
-            protectors.push({ name, realm, attack, index });
+            let price = 0;
+            const btns = item.querySelectorAll('.prot-btn');
+            for (const btn of btns) {
+                const isSoloBtn = btn.classList.contains('prot-btn--solo');
+                if (wantSolo === isSoloBtn) {
+                    const numMatch = btn.textContent.replace(/\s+/g, '').match(/(\d[\d,]*)$/);
+                    if (numMatch) price = parseInt(numMatch[1].replace(/,/g, ''));
+                    break;
+                }
+            }
+            if (priceThreshold > 0 && price > priceThreshold) {
+                logFn(`跳过 ${name}（${realm}），价格${price}超过阈值${priceThreshold}`, 'warn');
+                return;
+            }
+            protectors.push({ name, realm, attack, index, price });
         });
 
         const selected = selectProtectors(protectors, protectorPriorities);
@@ -2086,6 +2098,10 @@
                 </select>
             </div>
             <div class="cfg-row">
+                <label class="cfg-label">雇佣价格阈值 (超过则跳过，0=不限制)</label>
+                <input id="cfg-hirePriceThreshold" type="number" value="${cfg.protectors.hirePriceThreshold || 0}">
+            </div>
+            <div class="cfg-row">
                 <label class="cfg-label">无空闲护道者时</label>
                 <select id="cfg-onNoProtector">
                     <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
@@ -2245,6 +2261,7 @@
                 if (el('cfg-hireMode')) config.protectors.hireMode = el('cfg-hireMode').value;
                 if (el('cfg-onNoProtector')) config.protectors.onNoProtector = el('cfg-onNoProtector').value;
                 if (el('cfg-fightThreshold')) config.protectors.fightAttackThreshold = parseInt(el('cfg-fightThreshold').value) || 0;
+                if (el('cfg-hirePriceThreshold')) config.protectors.hirePriceThreshold = parseInt(el('cfg-hirePriceThreshold').value) || 0;
                 if (el('cfg-afterEscape')) config.protectors.afterEscape = el('cfg-afterEscape').value;
                 if (el('cfg-highPrice')) config.merchant.highPriceThreshold = parseInt(el('cfg-highPrice').value) || 7500000;
                 if (el('cfg-stonePriority')) config.merchant.stonePriority = el('cfg-stonePriority').value.split('|').map(s => s.trim()).filter(Boolean);
