@@ -550,6 +550,7 @@
 
     const DEFAULT_CONFIG = {
         protectors: {
+            hireProtector: true,               // 新增：监控模式下是否雇佣护道者
             priorities: [
                 { nameMatch: '蜉蝣一梦', sortBy: 'attack', sortOrder: 'desc' },
                 { realmMatch: '渡劫|大乘|合道', sortBy: 'attack', sortOrder: 'desc' }
@@ -836,9 +837,17 @@
             const o = document.getElementById('encounterOverlay');
             if (isOverlayVisible('encounterOverlay') && !hiring) {
                 const encounterMode = window.__thRunning ? 'treasure' : 'monitor';
-                if (encounterMode === 'treasure' && config.treasureHunt.hireProtector === false) {
+                if (encounterMode === 'treasure' && !config.treasureHunt.hireProtector) {
+                    // 寻宝模式关闭雇佣 -> 直接迎战
                     hiring = true;
                     thLog('遭遇妖兽，直接迎战...', 'info');
+                    clickButtonByText(o, '迎战');
+                    return;
+                }
+                if (encounterMode === 'monitor' && !config.protectors.hireProtector) {
+                    // 监控模式关闭雇佣 -> 直接迎战
+                    hiring = true;
+                    monitorLog('遭遇妖兽，直接迎战...', 'info');
                     clickButtonByText(o, '迎战');
                     return;
                 }
@@ -2110,6 +2119,7 @@
     // ==================== 配置面板 UI ====================
 
     function renderProtectorSection(cfg) {
+        const isMonitor = !document.querySelector('.mp-tab.active')?.dataset.tab || document.querySelector('.mp-tab.active').dataset.tab === 'monitor';
         return `<div class="cfg-section">
             <div class="cfg-section-label">护道者设置</div>
             <div class="cfg-row">
@@ -2172,6 +2182,7 @@
         try {
             const el = id => document.getElementById(id);
             if (el('cfg-hireMode')) config.protectors.hireMode = el('cfg-hireMode').value;
+            if (el('cfg-monitor-hireProtector')) config.protectors.hireProtector = el('cfg-monitor-hireProtector').checked;
             if (el('cfg-onNoProtector')) config.protectors.onNoProtector = el('cfg-onNoProtector').value;
             if (el('cfg-fightThreshold')) config.protectors.fightAttackThreshold = parseInt(el('cfg-fightThreshold').value) || 0;
             if (el('cfg-hirePriceThreshold')) config.protectors.hirePriceThreshold = parseInt(el('cfg-hirePriceThreshold').value) || 0;
@@ -2226,14 +2237,63 @@
         const panel = document.createElement('div');
         panel.id = 'config-panel';
         const cfg = JSON.parse(JSON.stringify(config));
+    
+        // 1. 在模板外部构建 protectorSectionHTML
+        let protectorSectionHTML = '';
+        if (isTreasure) {
+            protectorSectionHTML = renderProtectorSection(cfg);
+        } else {
+            protectorSectionHTML = `
+                <div class="cfg-section">
+                    <div class="cfg-section-label">护道者设置</div>
+                    <div class="cfg-row cfg-checkbox-row">
+                        <input id="cfg-monitor-hireProtector" type="checkbox" ${cfg.protectors.hireProtector !== false ? 'checked' : ''}>
+                        <label class="cfg-label" style="margin-bottom:0;">遭遇妖兽时雇佣护道者</label>
+                        <span class="cfg-hint">关闭则直接迎战</span>
+                    </div>
+                    <div id="cfg-hire-details" style="${cfg.protectors.hireProtector !== false ? '' : 'display:none;'}">
+                        <div class="cfg-row">
+                            <label class="cfg-label">雇佣模式</label>
+                            <select id="cfg-hireMode">
+                                <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
+                                <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
+                            </select>
+                        </div>
+                        <div class="cfg-row">
+                            <label class="cfg-label">雇佣价格阈值 (超过则跳过，0=不限制)</label>
+                            <input id="cfg-hirePriceThreshold" type="number" value="${cfg.protectors.hirePriceThreshold || 0}">
+                        </div>
+                        <div class="cfg-row">
+                            <label class="cfg-label">无空闲护道者时</label>
+                            <select id="cfg-onNoProtector">
+                                <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
+                                <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
+                            </select>
+                        </div>
+                        <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
+                            <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
+                            <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
+                        </div>
+                        <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
+                            <label class="cfg-label">逃跑后行为</label>
+                            <select id="cfg-afterEscape">
+                                <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
+                                <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>`;
+        }
+    
+        // 2. 构建完整的模板，直接插入 protectorSectionHTML 变量
         panel.innerHTML = `
             <div class="cfg-header">
                 <span class="cfg-title">${isTreasure ? '寻宝配置' : '探索配置'}</span>
                 <span class="cfg-close">&times;</span>
             </div>
-
-            ${renderProtectorSection(cfg)}
-
+    
+            ${protectorSectionHTML}
+    
             ${isTreasure ? '' : `
             <div class="cfg-section">
                 <div class="cfg-section-label">通用设置</div>
@@ -2243,7 +2303,7 @@
                     <span class="cfg-hint">关闭则直接进入普通冥想并停止脚本</span>
                 </div>
             </div>
-
+    
             <div class="cfg-section">
                 <div class="cfg-section-label">昼夜自动切换</div>
                 <div class="cfg-row cfg-checkbox-row">
@@ -2269,7 +2329,7 @@
                     </div>
                 </div>
             </div>
-
+    
             <div class="cfg-section">
                 <div class="cfg-section-label">商人设置</div>
                 <div class="cfg-row">
@@ -2291,9 +2351,9 @@
                     <span class="cfg-hint">关闭则无匹配商品时自动婉拒</span>
                 </div>
             </div>`}
-
+    
             ${renderPrioritySection(cfg)}
-
+    
             ${isTreasure ? `<div class="cfg-section">
                 <div class="cfg-section-label">寻宝设置</div>
                 <div class="cfg-row cfg-checkbox-row">
@@ -2310,15 +2370,16 @@
                     <input id="cfg-th-intervalMs" type="number" value="${cfg.treasureHunt.intervalMs}">
                 </div>
             </div>` : ''}
-
+    
             <div class="cfg-bottom-bar">
                 <button id="cfg-reset" class="cfg-btn cfg-btn-reset">重置默认</button>
             </div>
         `;
+    
         const monitorPanel = document.getElementById('monitor-panel');
         monitorPanel.appendChild(panel);
         configPanelEl = panel;
-
+    
         panel.querySelector('.cfg-close').addEventListener('click', () => {
             autoSaveConfig();
             panel.remove();
