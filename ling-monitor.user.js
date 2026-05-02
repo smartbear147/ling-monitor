@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.8.15-beta
+// @version 1.8.16-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -546,7 +546,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.8.15-beta';
+    const SCRIPT_VERSION = '1.8.16-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1913,6 +1913,16 @@
         panel.onclick = function (e) { e.stopPropagation(); };
         document.body.appendChild(panel);
 
+        // 恢复面板位置
+        const savedPos = GM_getValue('ling_panel_pos', null);
+        if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
+            const maxLeft = window.innerWidth - panel.offsetWidth;
+            const maxTop = window.innerHeight - panel.offsetHeight;
+            panel.style.right = 'auto';
+            panel.style.left = Math.max(0, Math.min(savedPos.left, maxLeft)) + 'px';
+            panel.style.top = Math.max(0, Math.min(savedPos.top, maxTop)) + 'px';
+        }
+
         // --- Tab 切换 ---
         const tabs = panel.querySelectorAll('.mp-tab');
         const tabContents = panel.querySelectorAll('.mp-tab-content');
@@ -1962,7 +1972,12 @@
             panel.style.left = newLeft + 'px';
             panel.style.top = newTop + 'px';
         };
-        const endDrag = () => { isDragging = false; };
+        const endDrag = () => {
+            if (isDragging) {
+                GM_setValue('ling_panel_pos', { left: panel.offsetLeft, top: panel.offsetTop });
+            }
+            isDragging = false;
+        };
 
         header.addEventListener('mousedown', (e) => {
             if (e.target.id && (e.target.id.includes('minimize') || e.target.id.includes('close'))) return;
