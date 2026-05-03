@@ -1878,7 +1878,7 @@
         panel.innerHTML = `
             <div class="mp-gold-line"></div>
             <div id="monitor-header">
-                <span class="mp-header-title">灵界助手 v${SCRIPT_VERSION}</span>
+                <span class="mp-header-title">v${SCRIPT_VERSION}</span>
                 <div class="mp-header-right">
                     <span id="monitor-minimize" title="缩小">&#x25BC;</span>
                     <span id="monitor-close" title="关闭">&#x2716;</span>
