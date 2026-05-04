@@ -2,7 +2,7 @@
 // @name 灵界助手
 // @namespace https://ling.muge.info
 // @version 1.9.0-beta
-// @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、灵纹洗练，支持手机端拖拽
+// @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
 // @grant GM_setValue
@@ -588,7 +588,7 @@
         }
         .priority-add:hover { border-color: var(--mp-accent); background: var(--mp-accent-subtle); }
 
-        /* === 灵纹洗练统计区域 === */
+        /* === 铭文洗练统计区域 === */
         #inscription-stats {
             padding: 6px 12px;
             display: flex; gap: 4px;
@@ -616,7 +616,7 @@
             letter-spacing: 0.5px;
         }
 
-        /* === 灵纹状态 === */
+        /* === 铭文状态 === */
         #inscription-status {
             font-family: 'Space Grotesk', sans-serif;
             font-size: 11px;
@@ -651,7 +651,7 @@
             50% { box-shadow: 0 0 8px rgba(78,205,196,0.4); }
         }
 
-        /* === 灵纹目标属性列表 === */
+        /* === 铭文目标属性列表 === */
         .affix-list { display: flex; flex-direction: column; gap: 4px; }
         .affix-row {
             display: flex; align-items: center; gap: 4px;
@@ -2055,7 +2055,7 @@
         if (!window.__monitorRunning) stopMainLoop();
     }
 
-    // ==================== 灵纹洗练功能 ====================
+    // ==================== 铭文洗练功能 ====================
 
     let inscriptionStats = {
         totalPulls: 0,
@@ -2203,7 +2203,7 @@
     function clickInscriptionTenPull() {
         const buttons = document.querySelectorAll('.modal-action-btn__text');
         for (const btn of buttons) {
-            if (btn.textContent.trim() === '十连灵纹') {
+            if (btn.textContent.trim() === '十连铭文') {
                 const clickTarget = btn.closest('button') || btn;
                 clickTarget.click();
                 return true;
@@ -2298,7 +2298,7 @@
             if (!window.__inscriptionRunning) return false;
             const buttons = document.querySelectorAll('.modal-action-btn__text');
             for (const btn of buttons) {
-                if (btn.textContent.trim() === '十连灵纹') {
+                if (btn.textContent.trim() === '十连铭文') {
                     const parentBtn = btn.closest('button');
                     if (parentBtn && !parentBtn.disabled && parentBtn.offsetParent !== null) {
                         return true;
@@ -2372,7 +2372,7 @@
         updateInscriptionStatsDisplay();
 
         if (config.inscription.notifyOnComplete && Notification.permission === 'granted') {
-            new Notification('灵纹洗练完成', {
+            new Notification('铭文洗练完成', {
                 body: `第${inscriptionStats.totalPulls}次十连达成！${matches.map(m => `${m.target}+${m.value}`).join(', ')}`,
                 icon: 'https://ling.muge.info/favicon.ico'
             });
@@ -2397,7 +2397,7 @@
         window.__inscriptionRunning = true;
         window.__inscriptionPaused = false;
         updateInscriptionStatusUI('running');
-        inscriptionLog('=== 开始灵纹洗练 ===', 'success');
+        inscriptionLog('=== 开始铭文洗练 ===', 'success');
         inscriptionLog(`目标: ${config.inscription.targetStats.map(t => `${t.stat}≥${t.minValue || 0}`).join(', ')}`, 'info');
         inscriptionLog(`模式: ${config.inscription.stopMode === 'any' ? '任一满足' : (config.inscription.stopMode === 'all' ? '全部满足' : '永不停')}`, 'info');
 
@@ -2540,7 +2540,7 @@
                 <div class="mp-tab-bar">
                     <button class="mp-tab active" data-tab="monitor">探索</button>
                     <button class="mp-tab" data-tab="treasure">寻宝</button>
-                    <button class="mp-tab" data-tab="inscription">灵纹</button>
+                    <button class="mp-tab" data-tab="inscription">铭文</button>
                 </div>
                 <div id="tab-monitor" class="mp-tab-content active">
                     <div id="monitor-status" class="mp-status-line status-stopped">
@@ -2631,6 +2631,7 @@
         // --- 拖拽 ---
         let isDragging = false;
         let startX, startY, initialLeft, initialTop;
+        let touchStartX, touchStartY;
         const header = document.getElementById('monitor-header');
 
         const startDrag = (clientX, clientY) => {
@@ -2659,18 +2660,33 @@
             isDragging = false;
         };
 
+        let mouseStartX, mouseStartY;
         header.addEventListener('mousedown', (e) => {
             if (e.target.id && (e.target.id.includes('minimize') || e.target.id.includes('close'))) return;
+            mouseStartX = e.clientX;
+            mouseStartY = e.clientY;
             startDrag(e.clientX, e.clientY);
             e.preventDefault();
         });
         document.addEventListener('mousemove', (e) => doDrag(e.clientX, e.clientY));
-        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                const moved = Math.abs(e.clientX - mouseStartX) + Math.abs(e.clientY - mouseStartY);
+                if (moved < 10 && panel.classList.contains('minimized')) {
+                    isDragging = false;
+                    toggleMinimize();
+                    return;
+                }
+            }
+            endDrag();
+        });
 
         header.addEventListener('touchstart', (e) => {
             const target = e.target;
             if (target.id && (target.id.includes('minimize') || target.id.includes('close'))) return;
             const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
             startDrag(touch.clientX, touch.clientY);
             e.preventDefault();
         }, { passive: false });
@@ -2680,7 +2696,19 @@
             doDrag(touch.clientX, touch.clientY);
             e.preventDefault();
         }, { passive: false });
-        document.addEventListener('touchend', endDrag);
+        document.addEventListener('touchend', (e) => {
+            if (isDragging) {
+                const moved = Math.abs((e.changedTouches[0]?.clientX || 0) - touchStartX)
+                             + Math.abs((e.changedTouches[0]?.clientY || 0) - touchStartY);
+                if (moved < 10 && panel.classList.contains('minimized')) {
+                    isDragging = false;
+                    toggleMinimize();
+                    e.preventDefault();
+                    return;
+                }
+            }
+            endDrag();
+        });
 
         // --- 缩小/展开 ---
         const minimizeBtn = document.getElementById('monitor-minimize');
@@ -2703,13 +2731,7 @@
             e.stopPropagation();
         });
 
-        // 圆形图标点击展开
-        panel.addEventListener('click', (e) => {
-            if (panel.classList.contains('minimized')) {
-                toggleMinimize();
-                e.stopPropagation();
-            }
-        });
+        // 圆形图标点击展开已由 mouseup/touchend 处理
 
         window.__monitorRunning = false;
         window.__thRunning = false;
@@ -2805,7 +2827,7 @@
             e.stopPropagation();
         });
 
-        // --- 灵纹洗练启动/停止 ---
+        // --- 铭文洗练启动/停止 ---
         inscriptionToggle.addEventListener('click', async (e) => {
             if (window.__inscriptionRunning) {
                 stopInscriptionPulling();
@@ -2823,7 +2845,7 @@
             e.stopPropagation();
         });
 
-        // --- 灵纹洗练暂停 ---
+        // --- 铭文洗练暂停 ---
         inscriptionPause.addEventListener('click', (e) => {
             if (window.__inscriptionRunning) {
                 pauseInscriptionPulling();
@@ -3048,7 +3070,7 @@
         // 2. 构建完整的模板，直接插入 protectorSectionHTML 变量
         panel.innerHTML = `
             <div class="cfg-header">
-                <span class="cfg-title">${isTreasure ? '寻宝配置' : (isInscription ? '灵纹配置' : '探索配置')}</span>
+                <span class="cfg-title">${isTreasure ? '寻宝配置' : (isInscription ? '铭文配置' : '探索配置')}</span>
                 <span class="cfg-close">&times;</span>
             </div>
 
@@ -3306,7 +3328,7 @@
             });
         }
 
-        // 灵纹目标属性列表
+        // 铭文目标属性列表
         const targetList = document.getElementById('ic-target-list');
         const STAT_OPTIONS = ['攻击', '防御', '气血', '神识'];
 
