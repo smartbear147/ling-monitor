@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.0-beta
+// @version 1.9.1-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -259,7 +259,7 @@
         .mp-daynight-indicator.night { color: var(--mp-log-info); }
 
         /* === 日志区域 === */
-        #monitor-log, #treasure-log {
+        #monitor-log, #treasure-log, #inscription-log {
             padding: 8px 12px; max-height: 200px; overflow-y: auto;
             background: var(--mp-bg-card);
             scrollbar-width: thin; scrollbar-color: var(--mp-border-subtle) transparent;
@@ -616,40 +616,10 @@
             letter-spacing: 0.5px;
         }
 
-        /* === 铭文状态 === */
-        #inscription-status {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 11px;
-            font-weight: 600; letter-spacing: 1px;
-            padding: 1px 10px;
-            border-radius: 16px;
-            display: flex; align-items: center; gap: 4px;
-        }
-        #inscription-status.status-idle {
-            background: var(--mp-bg-card);
-            color: var(--mp-text-muted);
-            border: 1px solid var(--mp-border);
-        }
-        #inscription-status.status-running {
-            background: rgba(78,205,196,0.15);
-            color: var(--mp-jade);
-            border: 1px solid rgba(78,205,196,0.3);
-            animation: ip-pulse-glow 2s ease-in-out infinite;
-        }
-        #inscription-status.status-paused {
-            background: rgba(240,160,80,0.15);
-            color: var(--mp-log-warn);
-            border: 1px solid rgba(240,160,80,0.3);
-        }
-        #inscription-status.status-discarding {
-            background: var(--mp-red-glow);
-            color: var(--mp-red);
-            border: 1px solid rgba(255,107,107,0.3);
-        }
-        @keyframes ip-pulse-glow {
-            0%, 100% { box-shadow: 0 0 0 rgba(78,205,196,0); }
-            50% { box-shadow: 0 0 8px rgba(78,205,196,0.4); }
-        }
+        /* === 铭文状态（复用 .mp-status-line） === */
+        .mp-status-line.status-idle { color: var(--mp-text-muted); }
+        .mp-status-line.status-paused { color: var(--mp-log-warn); }
+        .mp-status-line.status-discarding { color: var(--mp-red); }
 
         /* === 铭文目标属性列表 === */
         .affix-list { display: flex; flex-direction: column; gap: 4px; }
@@ -716,7 +686,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.0-beta';
+    const SCRIPT_VERSION = '1.9.1-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -2072,20 +2042,20 @@
         switch (status) {
             case 'running':
                 statusEl.innerHTML = '<span class="mp-status-dot"></span>洗练中';
-                statusEl.className = 'status-running';
+                statusEl.className = 'mp-status-line status-running';
                 break;
             case 'paused':
                 statusEl.innerHTML = '<span class="mp-status-dot"></span>暂停';
-                statusEl.className = 'status-paused';
+                statusEl.className = 'mp-status-line status-paused';
                 break;
             case 'discarding':
                 statusEl.innerHTML = '<span class="mp-status-dot"></span>放弃中';
-                statusEl.className = 'status-discarding';
+                statusEl.className = 'mp-status-line status-discarding';
                 break;
             case 'idle':
             default:
                 statusEl.innerHTML = '<span class="mp-status-dot"></span>待命';
-                statusEl.className = 'status-idle';
+                statusEl.className = 'mp-status-line status-idle';
                 break;
         }
     }
@@ -2203,7 +2173,7 @@
     function clickInscriptionTenPull() {
         const buttons = document.querySelectorAll('.modal-action-btn__text');
         for (const btn of buttons) {
-            if (btn.textContent.trim() === '十连铭文') {
+            if (btn.textContent.trim() === '十连灵纹') {
                 const clickTarget = btn.closest('button') || btn;
                 clickTarget.click();
                 return true;
@@ -2298,7 +2268,7 @@
             if (!window.__inscriptionRunning) return false;
             const buttons = document.querySelectorAll('.modal-action-btn__text');
             for (const btn of buttons) {
-                if (btn.textContent.trim() === '十连铭文') {
+                if (btn.textContent.trim() === '十连灵纹') {
                     const parentBtn = btn.closest('button');
                     if (parentBtn && !parentBtn.disabled && parentBtn.offsetParent !== null) {
                         return true;
@@ -2482,6 +2452,8 @@
             window.__inscriptionRunning = false;
             window.__inscriptionPaused = false;
             updateInscriptionStatusUI('idle');
+            const toggleBtn = document.getElementById('inscription-toggle');
+            if (toggleBtn) { toggleBtn.textContent = '开始洗练'; toggleBtn.className = 'mp-btn mp-btn-start'; }
 
             const elapsed = inscriptionStats.startTime ? Math.round((Date.now() - inscriptionStats.startTime) / 1000) : 0;
             inscriptionLog(`=== 结束 | ${inscriptionStats.totalPulls}次 | 达成${inscriptionStats.keptCount} | ${Math.floor(elapsed/60)}分${elapsed%60}秒 ===`, 'info');
@@ -2514,7 +2486,7 @@
         if (btn) { btn.textContent = '开始洗练'; btn.className = 'mp-btn mp-btn-start'; }
         if (status) {
             status.innerHTML = '<span class="mp-status-dot"></span>待命';
-            status.className = 'status-idle';
+            status.className = 'mp-status-line status-idle';
         }
     }
 
@@ -2570,7 +2542,7 @@
                             <div class="ip-stat-label">最佳</div>
                         </div>
                     </div>
-                    <div id="inscription-status" class="status-idle">
+                    <div id="inscription-status" class="mp-status-line status-idle">
                         <span class="mp-status-dot"></span>待命
                     </div>
                     <div id="inscription-log"></div>
@@ -2839,7 +2811,7 @@
                 btn.textContent = '停止洗练';
                 btn.className = 'mp-btn mp-btn-stop';
                 status.innerHTML = '<span class="mp-status-dot"></span>洗练中';
-                status.className = 'status-running';
+                status.className = 'mp-status-line status-running';
                 startInscriptionPulling().catch(e => inscriptionLog(`洗练致命错误: ${e.message}`, 'error'));
             }
             e.stopPropagation();
