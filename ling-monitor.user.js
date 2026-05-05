@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.1-beta
+// @version 1.9.2-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -263,6 +263,7 @@
             padding: 8px 12px; max-height: 200px; overflow-y: auto;
             background: var(--mp-bg-card);
             scrollbar-width: thin; scrollbar-color: var(--mp-border-subtle) transparent;
+            outline: none;
         }
         #monitor-log::-webkit-scrollbar, #treasure-log::-webkit-scrollbar, #inscription-log::-webkit-scrollbar { width: 5px; }
         #monitor-log::-webkit-scrollbar-track, #treasure-log::-webkit-scrollbar-track, #inscription-log::-webkit-scrollbar-track { background: transparent; }
@@ -686,7 +687,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.1-beta';
+    const SCRIPT_VERSION = '1.9.2-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1115,8 +1116,20 @@
             window.__monitorRunning = false;
             syncStopUI();
             monitorLog('神识不足，已自动冥想并停止脚本', 'warn');
-            return;
         }
+    }
+
+    // --- 整理储物袋 ---
+    let _lastMerge = 0;
+    async function mergeInventory() {
+        const now = Date.now();
+        if (now - _lastMerge < 300000) return;
+        _lastMerge = now;
+        try {
+            const r = await callApi('POST', '/api/game/inventory/merge', {});
+            if (r?.code === 200) activeLog('整理储物袋完成', 'success');
+            else activeLog(`整理储物袋失败: ${r?.message || '未知错误'}`, 'error');
+        } catch {}
     }
 
     // --- 主循环管理 ---
@@ -1126,6 +1139,7 @@
             try {
                 if (!isRunning()) return;
                 await checkAllPopups();
+                await mergeInventory();
             } catch (e) { console.error('[灵界助手] 主循环异常:', e); }
         }, 500);
     }
@@ -1168,25 +1182,6 @@
             await sleep(800);
         }
         return 'timeout';
-    }
-
-    // --- 辅助: 点击确认按钮 ---
-    async function clickConfirm() {
-        const start = Date.now();
-        while (Date.now() - start < 5000) {
-            if (!isRunning()) return false;
-            const btns = document.querySelectorAll('button');
-            for (const btn of btns) {
-                if (btn.offsetParent === null) continue;
-                const t = btn.textContent.trim();
-                if ((t === '确 定' || t === '确定' || t === '确认') && !t.includes('选择')) {
-                    btn.click();
-                    return true;
-                }
-            }
-            await sleep(800);
-        }
-        return false;
     }
 
     // --- 辅助: 关闭模态对话框 ---
@@ -1411,20 +1406,8 @@
             }
 
             if (hireResult.status === 'failed') {
-                logFn(` 雇佣失败(code=400): ${hireResult.message}`, 'error');
-                logFn(' 刷新列表重新雇佣...', 'action');
-                if (!isRunning()) return false;
-                dismissModal();
-                await sleep(800);
-                if (!isRunning()) return false;
-                clickHireProtector();
-                await sleep(800);
-                if (!isRunning()) return false;
-                const loaded = await waitForProtectorList(8000);
-                if (loaded === 'loaded' || loaded === 'empty') {
-                    return await findAndHireProtector(attempt + 1, logFn);
-                }
-                return false;
+                logFn(` 雇佣失败(code=400): ${hireResult.message}，尝试下一个候选者`, 'warn');
+                continue;
             }
 
             if (hireResult.status === 'success') {
@@ -1923,7 +1906,7 @@
     async function autoTreasureHunt() {
         const thStartTime = Date.now();
         thLog('=== 开始自动寻宝 ===', 'success');
-        let used = 0;
+        let used = 0, encounterCount = 0;
         const batch = config.treasureHunt.batchSize || Infinity;
         const intervalMs = config.treasureHunt.intervalMs;
 
@@ -1993,8 +1976,8 @@
                     }
                 }
 
-                await sleep(500);
                 if (isOverlayVisible('encounterOverlay')) {
+                    encounterCount++;
                     const name = document.getElementById('encounterMonsterName')?.textContent || '';
                     const realm = document.getElementById('encounterMonsterRealm')?.textContent || '';
                     const atk = document.getElementById('encounterMonsterAtk')?.textContent || '';
@@ -2015,7 +1998,7 @@
 
         const elapsed = Math.round((Date.now() - thStartTime) / 1000);
         const em = Math.floor(elapsed / 60), es = elapsed % 60;
-        thLog(`=== 寻宝结束，共使用 ${used} 张藏宝图，耗时 ${em}分${es}秒 ===`, 'success');
+        thLog(`=== 寻宝结束，共使用 ${used} 张藏宝图，遭遇 ${encounterCount} 次，耗时 ${em}分${es}秒 ===`, 'success');
         const medBtn = document.getElementById('meditateBtn');
         if (medBtn && !medBtn.classList.contains('meditating')) {
             medBtn.click();
