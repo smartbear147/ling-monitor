@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.2-beta
+// @version 1.9.3-beta
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -687,7 +687,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.2-beta';
+    const SCRIPT_VERSION = '1.9.3-beta';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -947,21 +947,21 @@
             return;
         }
 
-        // 2. 逮捕
-        const arrest = document.getElementById('arrestOverlay');
-        if (arrest && !arrest.classList.contains('hidden')) {
-            if (window.__monitorRunning) {
-                monitorLog('被逮捕！停止探索', 'error');
-                window.__monitorRunning = false;
-                syncStopUI();
-            }
-            if (window.__thRunning) {
-                thLog('被逮捕！停止寻宝', 'error');
-                syncStopTHUI();
-            }
-            stopMainLoop();
-            return;
-        }
+        // // 2. 逮捕
+        // const arrest = document.getElementById('arrestOverlay');
+        // if (arrest && !arrest.classList.contains('hidden')) {
+        //     if (window.__monitorRunning) {
+        //         monitorLog('被逮捕！停止探索', 'error');
+        //         window.__monitorRunning = false;
+        //         syncStopUI();
+        //     }
+        //     if (window.__thRunning) {
+        //         thLog('被逮捕！停止寻宝', 'error');
+        //         syncStopTHUI();
+        //     }
+        //     stopMainLoop();
+        //     return;
+        // }
 
         // 3. PVP
         if (isOverlayVisible('pvpEncounterModal')) {
@@ -1000,14 +1000,32 @@
                     // 寻宝模式关闭雇佣 -> 直接迎战
                     hiring = true;
                     thLog('遭遇妖兽，直接迎战...', 'info');
-                    clickButtonByText(o, '迎战');
+                    const battleResult = await withFetchIntercept(_uw, 'combat-choice', null, async (getCaptured) => {
+                        clickButtonByText(o, '迎战');
+                        for (let i = 0; i < 150; i++) {
+                            await sleep(200);
+                            if (!isRunning() || getCaptured()) break;
+                        }
+                        return getCaptured();
+                    });
+                    if (battleResult?.data) parseBattleResult(battleResult.data, thLog);
+                    signalBattleEnd(battleResult);
                     return;
                 }
                 if (encounterMode === 'monitor' && !config.protectors.hireProtector) {
                     // 监控模式关闭雇佣 -> 直接迎战
                     hiring = true;
                     monitorLog('遭遇妖兽，直接迎战...', 'info');
-                    clickButtonByText(o, '迎战');
+                    const battleResult = await withFetchIntercept(_uw, 'combat-choice', null, async (getCaptured) => {
+                        clickButtonByText(o, '迎战');
+                        for (let i = 0; i < 150; i++) {
+                            await sleep(200);
+                            if (!isRunning() || getCaptured()) break;
+                        }
+                        return getCaptured();
+                    });
+                    if (battleResult?.data) parseBattleResult(battleResult.data, monitorLog);
+                    signalBattleEnd(battleResult);
                     return;
                 }
                 await hireProtector(encounterMode);
@@ -1390,8 +1408,10 @@
                         }
                     }
                 }
-                await sleep(800);
-                if (!isRunning()) return null;
+                for (let i = 0; i < 40; i++) {
+                    await sleep(200);
+                    if (!isRunning() || getCaptured()) break;
+                }
                 return getCaptured();
             });
             if (!isRunning()) return false;
@@ -1412,7 +1432,7 @@
 
             if (hireResult.status === 'success') {
                 logFn(' 雇佣成功！', 'success');
-                return true;
+                return resp;
             }
 
             const toast = window.__lastToast || '';
@@ -1420,7 +1440,7 @@
                 logFn(` 护道者提示: ${toast}`, 'info');
             }
             logFn(' 雇佣完成（无明确响应）', 'warn');
-            return true;
+            return resp || true;
         }
 
         if (!isRunning()) return false;
@@ -1679,8 +1699,18 @@
                 logFn('暂无空闲护道者，选择迎战...', 'info');
                 if (!isRunning()) return;
                 const fightOverlay = document.getElementById('encounterOverlay');
-                if (fightOverlay) clickButtonByText(fightOverlay, '迎战');
-                await waitForBattleEnd();
+                if (fightOverlay) {
+                    const battleResult = await withFetchIntercept(_uw, 'combat-choice', null, async (getCaptured) => {
+                        clickButtonByText(fightOverlay, '迎战');
+                        for (let i = 0; i < 150; i++) {
+                            await sleep(200);
+                            if (!isRunning() || getCaptured()) break;
+                        }
+                        return getCaptured();
+                    });
+                    if (battleResult?.data) parseBattleResult(battleResult.data, logFn);
+                    signalBattleEnd(battleResult);
+                }
                 return;
             }
 
@@ -1696,23 +1726,37 @@
                 return;
             }
 
-            await waitForBattleEnd();
-            logFn('战斗结束', 'success');
+            if (hired?.data) parseBattleResult(hired.data, logFn);
+            signalBattleEnd(hired);
         } catch (e) {
             logFn('错误: ' + e.message, 'error');
-        } finally {
-            hiring = false;
         }
     }
 
-    async function waitForBattleEnd(maxWait = 60000) {
-        const battleStart = Date.now();
-        while (Date.now() - battleStart < maxWait) {
-            if (!isRunning()) return;
-            const overlayVisible = isOverlayVisible('encounterOverlay');
-            if (!overlayVisible) break;
-            await sleep(800);
+    let _battleEndResolve = null;
+    function signalBattleEnd(result) {
+        if (_battleEndResolve) {
+            const r = _battleEndResolve;
+            _battleEndResolve = null;
+            r(result);
         }
+    }
+    async function waitForBattleEnd(maxWait = 60000) {
+        return new Promise((resolve) => {
+            _battleEndResolve = resolve;
+            setTimeout(() => { _battleEndResolve = null; resolve(null); }, maxWait);
+        });
+    }
+    function parseBattleResult(data, logFn) {
+        if (!data?.logs) return;
+        for (const log of data.logs) {
+            const m = log.match(/你击败了\s*(.+?)！获得\s*(\d+)\s*修为.*?(\d+)\s*灵石/);
+            if (m) {
+                logFn(`击败 ${m[1]}，获得 ${m[2]} 修为，${m[3]} 灵石`, 'success');
+                return;
+            }
+        }
+        if (data.status === 'defeat') logFn('战斗失败', 'error');
     }
 
     // --- 商人逻辑 ---
@@ -1906,7 +1950,7 @@
     async function autoTreasureHunt() {
         const thStartTime = Date.now();
         thLog('=== 开始自动寻宝 ===', 'success');
-        let used = 0, encounterCount = 0;
+        let used = 0, encounterCount = 0, totalXiuwei = 0, totalLingshi = 0;
         const batch = config.treasureHunt.batchSize || Infinity;
         const intervalMs = config.treasureHunt.intervalMs;
 
@@ -1983,7 +2027,17 @@
                     const atk = document.getElementById('encounterMonsterAtk')?.textContent || '';
                     const hp = document.getElementById('encounterMonsterHp')?.textContent || '';
                     thLog(`遭遇 ${name} (${realm}) 攻:${atk} 血:${hp}`, 'warn');
-                    await waitForBattleEnd();
+                    const battleData = await waitForBattleEnd();
+                    if (battleData?.data?.logs) {
+                        for (const log of battleData.data.logs) {
+                            const m = log.match(/你击败了\s*(.+?)！获得\s*(\d+)\s*修为.*?(\d+)\s*灵石/);
+                            if (m) {
+                                totalXiuwei += parseInt(m[2]);
+                                totalLingshi += parseInt(m[3]);
+                                break;
+                            }
+                        }
+                    }
                     if (!window.__thRunning) break;
                 } else {
                     thLog('寻宝完成', 'success');
@@ -1998,7 +2052,7 @@
 
         const elapsed = Math.round((Date.now() - thStartTime) / 1000);
         const em = Math.floor(elapsed / 60), es = elapsed % 60;
-        thLog(`=== 寻宝结束，共使用 ${used} 张藏宝图，遭遇 ${encounterCount} 次，耗时 ${em}分${es}秒 ===`, 'success');
+        thLog(`=== 寻宝结束，共使用 ${used} 张藏宝图，遭遇 ${encounterCount} 次，获得 ${totalXiuwei} 修为 ${totalLingshi} 灵石，耗时 ${em}分${es}秒 ===`, 'success');
         const medBtn = document.getElementById('meditateBtn');
         if (medBtn && !medBtn.classList.contains('meditating')) {
             medBtn.click();
@@ -2496,6 +2550,7 @@
                     <button class="mp-tab active" data-tab="monitor">探索</button>
                     <button class="mp-tab" data-tab="treasure">寻宝</button>
                     <button class="mp-tab" data-tab="inscription">铭文</button>
+                    <button class="mp-tab" data-tab="changelog">更新</button>
                 </div>
                 <div id="tab-monitor" class="mp-tab-content active">
                     <div id="monitor-status" class="mp-status-line status-stopped">
@@ -2530,6 +2585,30 @@
                     </div>
                     <div id="inscription-log"></div>
                 </div>
+                <div id="tab-changelog" class="mp-tab-content">
+                    <div id="changelog-list" style="padding:8px 10px;font-size:12px;line-height:1.8;color:var(--mp-text);">
+                        <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.3</div>
+                            <div>• 新增战斗结果实时提示，显示击败目标与修为灵石收益</div>
+                            <div>• 新增寻宝结束统计，汇总藏宝图消耗、遭遇次数与总收益</div>
+                            <div>• 新增背包自动整理，脚本运行期间每5分钟执行一次</div>
+                            <div>• 优化护道者雇佣策略，失败后自动尝试下一候选者</div>
+                            <div>• 新增"更新"页签，展示近期版本变更记录</div>
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.2</div>
+                            <div>• 新增寻宝遭遇次数计数</div>
+                            <div>• 修复面板缩小后拖拽位置异常问题</div>
+                            <div>• 修复停止按钮文本状态不一致问题</div>
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.0 ~ v1.9.1</div>
+                            <div>• 新增铭文洗练功能，支持十连抽取、属性筛选与自动保留</div>
+                            <div>• 统一配置面板样式与交互规范</div>
+                            <div>• 调整面板层级至置顶，避免被游戏界面遮挡</div>
+                        </div>
+                    </div>
+                </div>
                 <div class="mp-bottom-bar">
                     <button id="monitor-toggle" class="mp-btn mp-btn-start">启动</button>
                     <button id="treasure-toggle" class="mp-btn mp-btn-treasure" style="display:none">寻宝</button>
@@ -2560,6 +2639,8 @@
         const treasureToggle = document.getElementById('treasure-toggle');
         const inscriptionToggle = document.getElementById('inscription-toggle');
         const inscriptionPause = document.getElementById('inscription-pause');
+        const configBtn = document.getElementById('monitor-config');
+        const clearBtn = document.getElementById('monitor-clear');
 
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
@@ -2567,10 +2648,13 @@
                 tab.classList.add('active');
                 const target = tab.dataset.tab;
                 tabContents.forEach(tc => tc.classList.toggle('active', tc.id === `tab-${target}`));
+                const isChangelog = target === 'changelog';
                 monitorToggle.style.display = target === 'monitor' ? '' : 'none';
                 treasureToggle.style.display = target === 'treasure' ? '' : 'none';
                 inscriptionToggle.style.display = target === 'inscription' ? '' : 'none';
                 inscriptionPause.style.display = target === 'inscription' ? '' : 'none';
+                configBtn.style.display = isChangelog ? 'none' : '';
+                clearBtn.style.display = isChangelog ? 'none' : '';
                 const logId = target === 'treasure' ? 'treasure-log' : (target === 'inscription' ? 'inscription-log' : 'monitor-log');
                 const logEl = document.getElementById(logId);
                 if (logEl) logEl.scrollTop = logEl.scrollHeight;
