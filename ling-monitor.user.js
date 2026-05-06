@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.5
+// @version 1.9.6
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -686,7 +686,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.5';
+    const SCRIPT_VERSION = '1.9.6';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1200,7 +1200,7 @@
         const start = Date.now();
         while (Date.now() - start < timeout) {
             if (!isRunning()) return 'stopped';
-            const count = document.querySelectorAll('.protector-card').length;
+            const count = document.querySelectorAll('.protector-card:not(.protector-card--master)').length;
             const list = document.getElementById('encounterProtectorList');
             const listText = list ? list.textContent : '';
             const hasEmptyText = listText.includes('暂无空闲');
@@ -1333,7 +1333,7 @@
         const maxRetries = config.protectors.maxRetries;
         const retryDelay = config.protectors.retryDelayMs;
 
-        const items = document.querySelectorAll('.protector-card');
+        const items = document.querySelectorAll('.protector-card:not(.protector-card--master)');
         if (items.length === 0) {
             if (!isRunning()) return false;
             if (attempt < maxRetries) {
@@ -2632,6 +2632,10 @@
                 </div>
                 <div id="tab-changelog" class="mp-tab-content">
                     <div id="changelog-list" style="padding:8px 10px;font-size:12px;line-height:1.8;color:var(--mp-text);">
+                        <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.6</div>
+                            <div>• 排除护道者列表中的师父卡片，避免误选师父进行雇佣</div>
+                        </div>
                         <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.5</div>
                             <div>• 优化寻宝模式遇敌等待逻辑，先等待 encounterOverlay 出现再等待消失</div>
