@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.4
+// @version 1.9.5
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -686,7 +686,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.4';
+    const SCRIPT_VERSION = '1.9.5';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -2035,9 +2035,17 @@
                     }
                     if (errMsg.includes('未处理的遇敌')) {
                         thLog('等待遇敌处理...', 'action');
+                        // 等待 encounterOverlay 出现
+                        for (let i = 0; i < 20; i++) {
+                            await sleep(500);
+                            if (!window.__thRunning) break;
+                            if (isOverlayVisible('encounterOverlay')) break;
+                        }
+                        // 等待 encounterOverlay 消失（主循环处理完成）
                         for (let i = 0; i < 60; i++) {
                             await sleep(500);
-                            if (!window.__thRunning || !isOverlayVisible('encounterOverlay')) break;
+                            if (!window.__thRunning) break;
+                            if (!isOverlayVisible('encounterOverlay')) break;
                         }
                         continue;
                     }
@@ -2625,6 +2633,10 @@
                 <div id="tab-changelog" class="mp-tab-content">
                     <div id="changelog-list" style="padding:8px 10px;font-size:12px;line-height:1.8;color:var(--mp-text);">
                         <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.5</div>
+                            <div>• 优化寻宝模式遇敌等待逻辑，先等待 encounterOverlay 出现再等待消失</div>
+                        </div>
+                        <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.4</div>
                             <div>• 修复遭遇妖兽时监控状态卡住问题（hiring 标志死锁）</div>
                             <div>• 增强浮层检测能力，支持 hidden 类、visibility、opacity 判断</div>
@@ -2638,12 +2650,6 @@
                             <div>• 新增背包自动整理，脚本运行期间每5分钟执行一次</div>
                             <div>• 优化护道者雇佣策略，失败后自动尝试下一候选者</div>
                             <div>• 新增"更新"页签，展示近期版本变更记录</div>
-                        </div>
-                        <div style="margin-bottom:12px;">
-                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.2</div>
-                            <div>• 新增寻宝遭遇次数计数</div>
-                            <div>• 修复面板缩小后拖拽位置异常问题</div>
-                            <div>• 修复停止按钮文本状态不一致问题</div>
                         </div>
                     </div>
                 </div>
