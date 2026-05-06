@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.3-beta
+// @version 1.9.4
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -270,7 +270,6 @@
         #monitor-log::-webkit-scrollbar-thumb, #treasure-log::-webkit-scrollbar-thumb, #inscription-log::-webkit-scrollbar-thumb { background: var(--mp-border-subtle); border-radius: 3px; }
         .mp-log-line {
             padding: 3px 0 3px 10px;
-            display: flex; align-items: flex-start; gap: 8px;
             font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
             font-size: 11px; font-weight: 500;
             line-height: 1.6;
@@ -281,7 +280,7 @@
         .mp-log-time {
             color: var(--mp-text-muted);
             font-size: 10px; font-weight: 500;
-            min-width: 60px; flex-shrink: 0;
+            margin-right: 8px;
         }
         .mp-log-content {
             color: var(--mp-text-secondary);
@@ -687,7 +686,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.3-beta';
+    const SCRIPT_VERSION = '1.9.4';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -787,7 +786,7 @@
             line.className = `mp-log-line${cls}`;
             const now = new Date();
             const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-            line.innerHTML = `<span class="mp-log-time">[${ts}]</span> <span class="mp-log-content">${escapeHTML(msg)}</span>`;
+            line.innerHTML = `<span class="mp-log-time">[${ts}]</span><span class="mp-log-content">${escapeHTML(msg)}</span>`;
             const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 30;
             logEl.appendChild(line);
             if (atBottom) logEl.scrollTop = logEl.scrollHeight;
@@ -811,7 +810,10 @@
 
     function isOverlayVisible(id) {
         const el = document.getElementById(id);
-        return el && getComputedStyle(el).display !== 'none';
+        if (!el) return false;
+        if (el.classList.contains('hidden')) return false;
+        const style = getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity) > 0;
     }
 
     function clickButtonByText(root, text) {
@@ -999,33 +1001,41 @@
                 if (encounterMode === 'treasure' && !config.treasureHunt.hireProtector) {
                     // 寻宝模式关闭雇佣 -> 直接迎战
                     hiring = true;
-                    thLog('遭遇妖兽，直接迎战...', 'info');
-                    const battleResult = await withFetchIntercept(_uw, 'combat-choice', null, async (getCaptured) => {
-                        clickButtonByText(o, '迎战');
-                        for (let i = 0; i < 150; i++) {
-                            await sleep(200);
-                            if (!isRunning() || getCaptured()) break;
-                        }
-                        return getCaptured();
-                    });
-                    if (battleResult?.data) parseBattleResult(battleResult.data, thLog);
-                    signalBattleEnd(battleResult);
+                    try {
+                        thLog('遭遇妖兽，直接迎战...', 'info');
+                        const battleResult = await withFetchIntercept(_uw, 'combat-choice', null, async (getCaptured) => {
+                            clickButtonByText(o, '迎战');
+                            for (let i = 0; i < 150; i++) {
+                                await sleep(200);
+                                if (!isRunning() || getCaptured()) break;
+                            }
+                            return getCaptured();
+                        });
+                        if (battleResult?.data) parseBattleResult(battleResult.data, thLog);
+                        signalBattleEnd(battleResult);
+                    } finally {
+                        hiring = false;
+                    }
                     return;
                 }
                 if (encounterMode === 'monitor' && !config.protectors.hireProtector) {
                     // 监控模式关闭雇佣 -> 直接迎战
                     hiring = true;
-                    monitorLog('遭遇妖兽，直接迎战...', 'info');
-                    const battleResult = await withFetchIntercept(_uw, 'combat-choice', null, async (getCaptured) => {
-                        clickButtonByText(o, '迎战');
-                        for (let i = 0; i < 150; i++) {
-                            await sleep(200);
-                            if (!isRunning() || getCaptured()) break;
-                        }
-                        return getCaptured();
-                    });
-                    if (battleResult?.data) parseBattleResult(battleResult.data, monitorLog);
-                    signalBattleEnd(battleResult);
+                    try {
+                        monitorLog('遭遇妖兽，直接迎战...', 'info');
+                        const battleResult = await withFetchIntercept(_uw, 'combat-choice', null, async (getCaptured) => {
+                            clickButtonByText(o, '迎战');
+                            for (let i = 0; i < 150; i++) {
+                                await sleep(200);
+                                if (!isRunning() || getCaptured()) break;
+                            }
+                            return getCaptured();
+                        });
+                        if (battleResult?.data) parseBattleResult(battleResult.data, monitorLog);
+                        signalBattleEnd(battleResult);
+                    } finally {
+                        hiring = false;
+                    }
                     return;
                 }
                 await hireProtector(encounterMode);
@@ -1730,22 +1740,41 @@
             signalBattleEnd(hired);
         } catch (e) {
             logFn('错误: ' + e.message, 'error');
+        } finally {
+            hiring = false;
         }
     }
 
     let _battleEndResolve = null;
+    let _pendingBattleResult = undefined;
     function signalBattleEnd(result) {
         if (_battleEndResolve) {
             const r = _battleEndResolve;
             _battleEndResolve = null;
+            _pendingBattleResult = undefined;
             r(result);
+        } else {
+            _pendingBattleResult = result;
         }
     }
     async function waitForBattleEnd(maxWait = 60000) {
-        return new Promise((resolve) => {
-            _battleEndResolve = resolve;
-            setTimeout(() => { _battleEndResolve = null; resolve(null); }, maxWait);
-        });
+        if (_pendingBattleResult !== undefined) {
+            const r = _pendingBattleResult;
+            _pendingBattleResult = undefined;
+            return r;
+        }
+        const start = Date.now();
+        while (Date.now() - start < maxWait) {
+            if (!isRunning()) return null;
+            if (_pendingBattleResult !== undefined) {
+                const r = _pendingBattleResult;
+                _pendingBattleResult = undefined;
+                return r;
+            }
+            if (!isOverlayVisible('encounterOverlay')) return _pendingBattleResult ?? null;
+            await sleep(300);
+        }
+        return null;
     }
     function parseBattleResult(data, logFn) {
         if (!data?.logs) return;
@@ -2003,6 +2032,14 @@
                     if (errMsg.includes('神识不足')) {
                         thLog('神识不足，停止寻宝', 'warn');
                         break;
+                    }
+                    if (errMsg.includes('未处理的遇敌')) {
+                        thLog('等待遇敌处理...', 'action');
+                        for (let i = 0; i < 60; i++) {
+                            await sleep(500);
+                            if (!window.__thRunning || !isOverlayVisible('encounterOverlay')) break;
+                        }
+                        continue;
                     }
                     await sleep(intervalMs);
                     continue;
@@ -2588,6 +2625,13 @@
                 <div id="tab-changelog" class="mp-tab-content">
                     <div id="changelog-list" style="padding:8px 10px;font-size:12px;line-height:1.8;color:var(--mp-text);">
                         <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.4</div>
+                            <div>• 修复遭遇妖兽时监控状态卡住问题（hiring 标志死锁）</div>
+                            <div>• 增强浮层检测能力，支持 hidden 类、visibility、opacity 判断</div>
+                            <div>• 优化寻宝模式遇敌等待逻辑</div>
+                            <div>• 修复日志复制换行问题</div>
+                        </div>
+                        <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.3</div>
                             <div>• 新增战斗结果实时提示，显示击败目标与修为灵石收益</div>
                             <div>• 新增寻宝结束统计，汇总藏宝图消耗、遭遇次数与总收益</div>
@@ -2600,12 +2644,6 @@
                             <div>• 新增寻宝遭遇次数计数</div>
                             <div>• 修复面板缩小后拖拽位置异常问题</div>
                             <div>• 修复停止按钮文本状态不一致问题</div>
-                        </div>
-                        <div style="margin-bottom:12px;">
-                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.0 ~ v1.9.1</div>
-                            <div>• 新增铭文洗练功能，支持十连抽取、属性筛选与自动保留</div>
-                            <div>• 统一配置面板样式与交互规范</div>
-                            <div>• 调整面板层级至置顶，避免被游戏界面遮挡</div>
                         </div>
                     </div>
                 </div>
