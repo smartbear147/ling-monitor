@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.6
+// @version 1.9.7
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -686,7 +686,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.6';
+    const SCRIPT_VERSION = '1.9.7';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -2633,6 +2633,10 @@
                 <div id="tab-changelog" class="mp-tab-content">
                     <div id="changelog-list" style="padding:8px 10px;font-size:12px;line-height:1.8;color:var(--mp-text);">
                         <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.7</div>
+                            <div>• 修复配置修改后收起面板未保存的问题</div>
+                        </div>
+                        <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.6</div>
                             <div>• 排除护道者列表中的师父卡片，避免误选师父进行雇佣</div>
                         </div>
@@ -3094,6 +3098,7 @@
 
     function toggleConfigPanel() {
         if (configPanelEl) {
+            autoSaveConfig();
             configPanelEl.remove();
             configPanelEl = null;
             return;
