@@ -486,8 +486,28 @@
         }
         #config-panel input[type=checkbox],
         #inscription-config-panel input[type=checkbox] {
+            -webkit-appearance: none; appearance: none;
             width: 16px; height: 16px;
-            accent-color: var(--mp-accent);
+            background: var(--mp-bg-input);
+            border: 1.5px solid var(--mp-text-muted);
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+        }
+        #config-panel input[type=checkbox]:checked,
+        #inscription-config-panel input[type=checkbox]:checked {
+            background: var(--mp-accent);
+            border-color: var(--mp-accent);
+        }
+        #config-panel input[type=checkbox]:checked::after,
+        #inscription-config-panel input[type=checkbox]:checked::after {
+            content: '';
+            position: absolute;
+            left: 0.25em; top: 0.05em;
+            width: 0.35em; height: 0.6em;
+            border: solid var(--mp-bg);
+            border-width: 0 0.14em 0.14em 0;
+            transform: rotate(45deg);
         }
         .cfg-checkbox-row {
             display: flex; align-items: center; gap: 8px;
@@ -2649,6 +2669,10 @@
                             <div>• 新增战斗结束后自动购买宗门回血丹</div>
                             <div>• 寻宝使用物品数量支持配置，新增"每次使用数量"选项</div>
                             <div>• 优化寻宝战斗结束判断，改为依据接口返回而非面板状态</div>
+                            <div>• 护道者优先级设置移入护道者设置区域</div>
+                            <div>• 优化配置面板布局，取消勾选时隐藏关联设置</div>
+                            <div>• 修复复选框在夜间模式下未选中状态显示异常</div>
+                            <div>• 切换到更新Tab时自动关闭配置面板</div>
                         </div>
                         <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.7</div>
@@ -2657,25 +2681,6 @@
                         <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.6</div>
                             <div>• 排除护道者列表中的师父卡片，避免误选师父进行雇佣</div>
-                        </div>
-                        <div style="margin-bottom:12px;">
-                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.5</div>
-                            <div>• 优化寻宝模式遇敌等待逻辑，先等待 encounterOverlay 出现再等待消失</div>
-                        </div>
-                        <div style="margin-bottom:12px;">
-                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.4</div>
-                            <div>• 修复遭遇妖兽时监控状态卡住问题（hiring 标志死锁）</div>
-                            <div>• 增强浮层检测能力，支持 hidden 类、visibility、opacity 判断</div>
-                            <div>• 优化寻宝模式遇敌等待逻辑</div>
-                            <div>• 修复日志复制换行问题</div>
-                        </div>
-                        <div style="margin-bottom:12px;">
-                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.3</div>
-                            <div>• 新增战斗结果实时提示，显示击败目标与修为灵石收益</div>
-                            <div>• 新增寻宝结束统计，汇总藏宝图消耗、遭遇次数与总收益</div>
-                            <div>• 新增背包自动整理，脚本运行期间每5分钟执行一次</div>
-                            <div>• 优化护道者雇佣策略，失败后自动尝试下一候选者</div>
-                            <div>• 新增"更新"页签，展示近期版本变更记录</div>
                         </div>
                     </div>
                 </div>
@@ -2732,7 +2737,7 @@
                     autoSaveConfig(true);
                     configPanelEl.remove();
                     configPanelEl = null;
-                    toggleConfigPanel();
+                    if (!isChangelog) toggleConfigPanel();
                 }
             });
         });
@@ -2986,37 +2991,46 @@
     // ==================== 配置面板 UI ====================
 
     function renderProtectorSection(cfg) {
-        const isMonitor = !document.querySelector('.mp-tab.active')?.dataset.tab || document.querySelector('.mp-tab.active').dataset.tab === 'monitor';
         return `<div class="cfg-section">
             <div class="cfg-section-label">护道者设置</div>
-            <div class="cfg-row">
-                <label class="cfg-label">雇佣模式</label>
-                <select id="cfg-hireMode">
-                    <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
-                    <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
-                </select>
+            <div class="cfg-row cfg-checkbox-row">
+                <input id="cfg-th-hireProtector" type="checkbox" ${cfg.treasureHunt.hireProtector !== false ? 'checked' : ''}>
+                <label class="cfg-label" style="margin-bottom:0;">遭遇时雇佣护道者</label>
+                <span class="cfg-hint">关闭则直接迎战</span>
             </div>
-            <div class="cfg-row">
-                <label class="cfg-label">雇佣价格阈值 (超过则跳过，0=不限制)</label>
-                <input id="cfg-hirePriceThreshold" type="number" value="${cfg.protectors.hirePriceThreshold || 0}">
-            </div>
-            <div class="cfg-row">
-                <label class="cfg-label">无空闲护道者时</label>
-                <select id="cfg-onNoProtector">
-                    <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
-                    <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
-                </select>
-            </div>
-            <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
-                <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
-                <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
-            </div>
-            <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
-                <label class="cfg-label">逃跑后行为</label>
-                <select id="cfg-afterEscape">
-                    <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
-                    <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
-                </select>
+            <div id="cfg-th-hire-details" style="${cfg.treasureHunt.hireProtector !== false ? '' : 'display:none;'}">
+                <div class="cfg-row">
+                    <label class="cfg-label">雇佣模式</label>
+                    <select id="cfg-hireMode">
+                        <option value="together" ${cfg.protectors.hireMode === 'together' ? 'selected' : ''}>协同（并肩作战，分担伤害）</option>
+                        <option value="solo" ${cfg.protectors.hireMode === 'solo' ? 'selected' : ''}>单独（护道者替你承担全部攻击）</option>
+                    </select>
+                </div>
+                <div class="cfg-row">
+                    <label class="cfg-label">雇佣价格阈值 (超过则跳过，0=不限制)</label>
+                    <input id="cfg-hirePriceThreshold" type="number" value="${cfg.protectors.hirePriceThreshold || 0}">
+                </div>
+                <div class="cfg-row">
+                    <label class="cfg-label">无空闲护道者时</label>
+                    <select id="cfg-onNoProtector">
+                        <option value="escape" ${cfg.protectors.onNoProtector === 'escape' ? 'selected' : ''}>逃跑</option>
+                        <option value="fight" ${cfg.protectors.onNoProtector === 'fight' ? 'selected' : ''}>迎战</option>
+                    </select>
+                </div>
+                <div class="cfg-row" id="cfg-fightThreshold-wrap" style="${cfg.protectors.onNoProtector === 'fight' ? '' : 'display:none;'}">
+                    <label class="cfg-label">迎战妖兽攻击阈值 (超过则逃跑，0=不限制)</label>
+                    <input id="cfg-fightThreshold" type="number" value="${cfg.protectors.fightAttackThreshold || 0}">
+                </div>
+                <div class="cfg-row" id="cfg-afterEscape-wrap" style="${cfg.protectors.onNoProtector === 'escape' ? '' : 'display:none;'}">
+                    <label class="cfg-label">逃跑后行为</label>
+                    <select id="cfg-afterEscape">
+                        <option value="stop" ${cfg.protectors.afterEscape === 'stop' ? 'selected' : ''}>冥想并停止脚本</option>
+                        <option value="continue" ${cfg.protectors.afterEscape === 'continue' ? 'selected' : ''}>继续探索</option>
+                    </select>
+                </div>
+                <div id="cfg-th-priority-wrap" style="margin-top:10px;">
+                    ${renderPrioritySection(cfg)}
+                </div>
             </div>
         </div>`;
     }
@@ -3141,7 +3155,7 @@
                     <div class="cfg-section-label">护道者设置</div>
                     <div class="cfg-row cfg-checkbox-row">
                         <input id="cfg-monitor-hireProtector" type="checkbox" ${cfg.protectors.hireProtector !== false ? 'checked' : ''}>
-                        <label class="cfg-label" style="margin-bottom:0;">遭遇妖兽时雇佣护道者</label>
+                        <label class="cfg-label" style="margin-bottom:0;">遭遇时雇佣护道者</label>
                         <span class="cfg-hint">关闭则直接迎战</span>
                     </div>
                     <div id="cfg-hire-details" style="${cfg.protectors.hireProtector !== false ? '' : 'display:none;'}">
@@ -3175,6 +3189,9 @@
                             </select>
                         </div>
                     </div>
+                    <div id="cfg-priority-wrap" style="margin-top:10px;${cfg.protectors.hireProtector !== false ? '' : 'display:none;'}">
+                        ${renderPrioritySection(cfg)}
+                    </div>
                 </div>`;
         }
 
@@ -3192,8 +3209,8 @@
                 <div class="cfg-section-label">通用设置</div>
                 <div class="cfg-row cfg-checkbox-row">
                     <input id="cfg-highLevelMeditate" type="checkbox" ${cfg.general.highLevelMeditate ? 'checked' : ''}>
-                    <label class="cfg-label" style="margin-bottom:0;">神识不足时尝试高级冥想</label>
-                    <span class="cfg-hint">关闭则直接进入普通冥想并停止脚本</span>
+                    <label class="cfg-label" style="margin-bottom:0;">仙缘高级冥想</label>
+                    <span class="cfg-hint">关闭则直接冥想并停止脚本</span>
                 </div>
             </div>
 
@@ -3240,20 +3257,13 @@
                 <div class="cfg-row cfg-hint" style="padding:0;">匹配规则：先按关键词顺序，同关键词按品质优先级，高价物品始终最优先</div>
                 <div class="cfg-row cfg-checkbox-row">
                     <input id="cfg-fallback" type="checkbox" ${cfg.merchant.fallbackToExpensive ? 'checked' : ''}>
-                    <label class="cfg-label" style="margin-bottom:0;">无匹配商品时买最贵的</label>
-                    <span class="cfg-hint">关闭则无匹配商品时自动婉拒</span>
+                    <label class="cfg-label" style="margin-bottom:0;">无匹配时买最贵</label>
+                    <span class="cfg-hint">关闭则无匹配时自动婉拒</span>
                 </div>
             </div>`)}
 
-            ${isInscription ? '' : renderPrioritySection(cfg)}
-
             ${isTreasure ? `<div class="cfg-section">
                 <div class="cfg-section-label">寻宝设置</div>
-                <div class="cfg-row cfg-checkbox-row">
-                    <input id="cfg-th-hireProtector" type="checkbox" ${cfg.treasureHunt.hireProtector !== false ? 'checked' : ''}>
-                    <label class="cfg-label" style="margin-bottom:0;">遭遇时雇佣护道者</label>
-                    <span class="cfg-hint">关闭则直接迎战</span>
-                </div>
                 <div class="cfg-row">
                     <label class="cfg-label">每批使用数量 (0 = 全部用完)</label>
                     <input id="cfg-th-batchSize" type="number" value="${cfg.treasureHunt.batchSize}">
@@ -3351,6 +3361,24 @@
             onNoProtectorEl.addEventListener('change', (e) => {
                 document.getElementById('cfg-fightThreshold-wrap').style.display = e.target.value === 'fight' ? '' : 'none';
                 document.getElementById('cfg-afterEscape-wrap').style.display = e.target.value === 'escape' ? '' : 'none';
+            });
+        }
+
+        const monitorHireEl = document.getElementById('cfg-monitor-hireProtector');
+        if (monitorHireEl) {
+            monitorHireEl.addEventListener('change', (e) => {
+                const details = document.getElementById('cfg-hire-details');
+                if (details) details.style.display = e.target.checked ? '' : 'none';
+                const priorityWrap = document.getElementById('cfg-priority-wrap');
+                if (priorityWrap) priorityWrap.style.display = e.target.checked ? '' : 'none';
+            });
+        }
+
+        const thHireEl = document.getElementById('cfg-th-hireProtector');
+        if (thHireEl) {
+            thHireEl.addEventListener('change', (e) => {
+                const details = document.getElementById('cfg-th-hire-details');
+                if (details) details.style.display = e.target.checked ? '' : 'none';
             });
         }
 
