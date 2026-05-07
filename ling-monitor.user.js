@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.7
+// @version 1.9.8
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -686,7 +686,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.7';
+    const SCRIPT_VERSION = '1.9.8';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -715,6 +715,7 @@
         treasureHunt: {
             batchSize: 0,
             intervalMs: 2000,
+            useQuantity: 10,
             hireProtector: true,
         },
         dayNight: {
@@ -1012,7 +1013,7 @@
                             return getCaptured();
                         });
                         if (battleResult?.data) parseBattleResult(battleResult.data, thLog);
-                        signalBattleEnd(battleResult);
+                        await signalBattleEnd(battleResult);
                     } finally {
                         hiring = false;
                     }
@@ -1032,7 +1033,7 @@
                             return getCaptured();
                         });
                         if (battleResult?.data) parseBattleResult(battleResult.data, monitorLog);
-                        signalBattleEnd(battleResult);
+                        await signalBattleEnd(battleResult);
                     } finally {
                         hiring = false;
                     }
@@ -1719,7 +1720,7 @@
                         return getCaptured();
                     });
                     if (battleResult?.data) parseBattleResult(battleResult.data, logFn);
-                    signalBattleEnd(battleResult);
+                    await signalBattleEnd(battleResult);
                 }
                 return;
             }
@@ -1737,7 +1738,7 @@
             }
 
             if (hired?.data) parseBattleResult(hired.data, logFn);
-            signalBattleEnd(hired);
+            await signalBattleEnd(hired);
         } catch (e) {
             logFn('错误: ' + e.message, 'error');
         } finally {
@@ -1747,7 +1748,21 @@
 
     let _battleEndResolve = null;
     let _pendingBattleResult = undefined;
+    let _sectBuyDone = Promise.resolve();
+    let _sectBuyResolve = null;
+    function resetSectBuyPromise() {
+        _sectBuyDone = new Promise(r => { _sectBuyResolve = r; });
+    }
+    async function autoBuySectItems() {
+        try {
+            const hpRes = await callApi('POST', '/api/game/player-sect/buy-builtin-item', { itemId: 'psect_heal_hp', quantity: 1 });
+            activeLog()(`宗门回血: ${hpRes?.code === 200 ? '成功' : '失败(' + (hpRes?.message || hpRes?.code) + ')'}`, hpRes?.code === 200 ? 'success' : 'warn');
+        } catch (e) { activeLog()('购买药品异常: ' + e.message, 'error'); }
+        if (_sectBuyResolve) { _sectBuyResolve(); _sectBuyResolve = null; }
+    }
     function signalBattleEnd(result) {
+        resetSectBuyPromise();
+        autoBuySectItems();
         if (_battleEndResolve) {
             const r = _battleEndResolve;
             _battleEndResolve = null;
@@ -1758,20 +1773,17 @@
         }
     }
     async function waitForBattleEnd(maxWait = 60000) {
-        if (_pendingBattleResult !== undefined) {
-            const r = _pendingBattleResult;
+        async function resolveWithBuy() {
+            const r = _pendingBattleResult ?? null;
             _pendingBattleResult = undefined;
+            await _sectBuyDone;
             return r;
         }
+        if (_pendingBattleResult !== undefined) return await resolveWithBuy();
         const start = Date.now();
         while (Date.now() - start < maxWait) {
             if (!isRunning()) return null;
-            if (_pendingBattleResult !== undefined) {
-                const r = _pendingBattleResult;
-                _pendingBattleResult = undefined;
-                return r;
-            }
-            if (!isOverlayVisible('encounterOverlay')) return _pendingBattleResult ?? null;
+            if (_pendingBattleResult !== undefined) return await resolveWithBuy();
             await sleep(300);
         }
         return null;
@@ -1970,7 +1982,7 @@
             };
             window.addEventListener(eventName, handler);
             const hook = document.createElement('script');
-            hook.textContent = `(async()=>{const eventName=${JSON.stringify(eventName)};let done=false;let watchdog=null;let restore=()=>{};const emit=(detail)=>window.dispatchEvent(new CustomEvent(eventName,{detail}));const finish=(detail)=>{if(done)return;done=true;if(watchdog)clearTimeout(watchdog);restore();emit(detail)};try{const _post=api.post;const _orig=_post.bind(api);restore=()=>{api.post=_post};watchdog=setTimeout(()=>finish({code:-1,message:'超时'}),10000);api.post=function(p,b){if(p==='/api/game/use-item'&&!done){done=true;if(watchdog)clearTimeout(watchdog);restore();try{const r=_orig(p,b);Promise.resolve(r).then(d=>emit(d)).catch(()=>emit({code:-1,message:'请求失败'}));return r}catch(e){emit({code:-1,message:e.message});throw e}}return _orig(p,b)};await useItem(${JSON.stringify(itemId)})}catch(e){finish({code:-1,message:e.message})}})()`;
+            hook.textContent = `(async()=>{const eventName=${JSON.stringify(eventName)};let done=false;let watchdog=null;let restore=()=>{};const emit=(detail)=>window.dispatchEvent(new CustomEvent(eventName,{detail}));const finish=(detail)=>{if(done)return;done=true;if(watchdog)clearTimeout(watchdog);restore();emit(detail)};try{const _post=api.post;const _orig=_post.bind(api);restore=()=>{api.post=_post};watchdog=setTimeout(()=>finish({code:-1,message:'超时'}),10000);api.post=function(p,b){if(p==='/api/game/use-item'){b=Object.assign({},b,{quantity:${config.treasureHunt.useQuantity ?? 10}});if(!done){done=true;if(watchdog)clearTimeout(watchdog);restore();try{const r=_orig(p,b);Promise.resolve(r).then(d=>emit(d)).catch(()=>emit({code:-1,message:'请求失败'}));return r}catch(e){emit({code:-1,message:e.message});throw e}}}return _orig(p,b)};await useItem(${JSON.stringify(itemId)})}catch(e){finish({code:-1,message:e.message})}})()`;
             document.head.appendChild(hook);
             hook.remove();
         });
@@ -2097,7 +2109,7 @@
 
         const elapsed = Math.round((Date.now() - thStartTime) / 1000);
         const em = Math.floor(elapsed / 60), es = elapsed % 60;
-        thLog(`=== 寻宝结束，共使用 ${used} 张藏宝图，遭遇 ${encounterCount} 次，获得 ${totalXiuwei} 修为 ${totalLingshi} 灵石，耗时 ${em}分${es}秒 ===`, 'success');
+        thLog(`=== 寻宝结束，共使用 ${used} 次藏宝图，遭遇 ${encounterCount} 次，获得 ${totalXiuwei} 修为 ${totalLingshi} 灵石，耗时 ${em}分${es}秒 ===`, 'success');
         const medBtn = document.getElementById('meditateBtn');
         if (medBtn && !medBtn.classList.contains('meditating')) {
             medBtn.click();
@@ -2633,6 +2645,12 @@
                 <div id="tab-changelog" class="mp-tab-content">
                     <div id="changelog-list" style="padding:8px 10px;font-size:12px;line-height:1.8;color:var(--mp-text);">
                         <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.8</div>
+                            <div>• 新增战斗结束后自动购买宗门回血丹</div>
+                            <div>• 寻宝使用物品数量支持配置，新增"每次使用数量"选项</div>
+                            <div>• 优化寻宝战斗结束判断，改为依据接口返回而非面板状态</div>
+                        </div>
+                        <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.7</div>
                             <div>• 修复配置修改后收起面板未保存的问题</div>
                         </div>
@@ -3043,6 +3061,7 @@
             if (el('cfg-highLevelMeditate')) config.general.highLevelMeditate = el('cfg-highLevelMeditate').checked;
             if (el('cfg-th-batchSize')) config.treasureHunt.batchSize = parseInt(el('cfg-th-batchSize').value) || 0;
             if (el('cfg-th-intervalMs')) config.treasureHunt.intervalMs = parseInt(el('cfg-th-intervalMs').value) || 2000;
+            if (el('cfg-th-useQuantity')) config.treasureHunt.useQuantity = Math.max(1, parseInt(el('cfg-th-useQuantity').value) || 10);
             if (el('cfg-th-hireProtector')) config.treasureHunt.hireProtector = el('cfg-th-hireProtector').checked;
             if (el('cfg-dn-enabled')) config.dayNight.enabled = el('cfg-dn-enabled').checked;
             if (el('cfg-dn-interval')) config.dayNight.checkIntervalSec = Math.max(10, parseInt(el('cfg-dn-interval').value) || 30);
@@ -3242,6 +3261,10 @@
                 <div class="cfg-row">
                     <label class="cfg-label">使用间隔 (毫秒)</label>
                     <input id="cfg-th-intervalMs" type="number" value="${cfg.treasureHunt.intervalMs}">
+                </div>
+                <div class="cfg-row">
+                    <label class="cfg-label">每次使用数量</label>
+                    <input id="cfg-th-useQuantity" type="number" value="${cfg.treasureHunt.useQuantity ?? 10}" min="1">
                 </div>
             </div>` : ''}
 
