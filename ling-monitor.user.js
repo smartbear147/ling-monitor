@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name 灵界助手
 // @namespace https://ling.muge.info
-// @version 1.9.8
+// @version 1.9.9
 // @description 自动雇佣护道者、购买商人物品、死亡复活、关闭打赏弹窗、自动寻宝、铭文洗练，支持手机端拖拽
 // @match https://ling.muge.info/*
 // @grant GM_getValue
@@ -706,7 +706,7 @@
     `);
 
     // --- 版本与配置 ---
-    const SCRIPT_VERSION = '1.9.8';
+    const SCRIPT_VERSION = '1.9.9';
 
     const DEFAULT_CONFIG = {
         protectors: {
@@ -1033,7 +1033,7 @@
                             return getCaptured();
                         });
                         if (battleResult?.data) parseBattleResult(battleResult.data, thLog);
-                        await signalBattleEnd(battleResult);
+                        signalBattleEnd(battleResult);
                     } finally {
                         hiring = false;
                     }
@@ -1053,7 +1053,7 @@
                             return getCaptured();
                         });
                         if (battleResult?.data) parseBattleResult(battleResult.data, monitorLog);
-                        await signalBattleEnd(battleResult);
+                        signalBattleEnd(battleResult);
                     } finally {
                         hiring = false;
                     }
@@ -1740,7 +1740,7 @@
                         return getCaptured();
                     });
                     if (battleResult?.data) parseBattleResult(battleResult.data, logFn);
-                    await signalBattleEnd(battleResult);
+                    signalBattleEnd(battleResult);
                 }
                 return;
             }
@@ -1758,7 +1758,7 @@
             }
 
             if (hired?.data) parseBattleResult(hired.data, logFn);
-            await signalBattleEnd(hired);
+            signalBattleEnd(hired);
         } catch (e) {
             logFn('错误: ' + e.message, 'error');
         } finally {
@@ -1768,21 +1768,7 @@
 
     let _battleEndResolve = null;
     let _pendingBattleResult = undefined;
-    let _sectBuyDone = Promise.resolve();
-    let _sectBuyResolve = null;
-    function resetSectBuyPromise() {
-        _sectBuyDone = new Promise(r => { _sectBuyResolve = r; });
-    }
-    async function autoBuySectItems() {
-        try {
-            const hpRes = await callApi('POST', '/api/game/player-sect/buy-builtin-item', { itemId: 'psect_heal_hp', quantity: 1 });
-            activeLog()(`宗门回血: ${hpRes?.code === 200 ? '成功' : '失败(' + (hpRes?.message || hpRes?.code) + ')'}`, hpRes?.code === 200 ? 'success' : 'warn');
-        } catch (e) { activeLog()('购买药品异常: ' + e.message, 'error'); }
-        if (_sectBuyResolve) { _sectBuyResolve(); _sectBuyResolve = null; }
-    }
     function signalBattleEnd(result) {
-        resetSectBuyPromise();
-        autoBuySectItems();
         if (_battleEndResolve) {
             const r = _battleEndResolve;
             _battleEndResolve = null;
@@ -1793,17 +1779,19 @@
         }
     }
     async function waitForBattleEnd(maxWait = 60000) {
-        async function resolveWithBuy() {
-            const r = _pendingBattleResult ?? null;
+        if (_pendingBattleResult !== undefined) {
+            const r = _pendingBattleResult;
             _pendingBattleResult = undefined;
-            await _sectBuyDone;
             return r;
         }
-        if (_pendingBattleResult !== undefined) return await resolveWithBuy();
         const start = Date.now();
         while (Date.now() - start < maxWait) {
             if (!isRunning()) return null;
-            if (_pendingBattleResult !== undefined) return await resolveWithBuy();
+            if (_pendingBattleResult !== undefined) {
+                const r = _pendingBattleResult;
+                _pendingBattleResult = undefined;
+                return r;
+            }
             await sleep(300);
         }
         return null;
@@ -2665,8 +2653,12 @@
                 <div id="tab-changelog" class="mp-tab-content">
                     <div id="changelog-list" style="padding:8px 10px;font-size:12px;line-height:1.8;color:var(--mp-text);">
                         <div style="margin-bottom:12px;">
+                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.9</div>
+                            <div>• 移除宗门回血功能，修复战斗后回血重复调用导致寻宝循环卡死</div>
+                            <div>• 简化战斗结束信号机制，移除冗余 Promise 同步链</div>
+                        </div>
+                        <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.8</div>
-                            <div>• 新增战斗结束后自动购买宗门回血丹</div>
                             <div>• 寻宝使用物品数量支持配置，新增"每次使用数量"选项</div>
                             <div>• 优化寻宝战斗结束判断，改为依据接口返回而非面板状态</div>
                             <div>• 护道者优先级设置移入护道者设置区域</div>
@@ -2677,10 +2669,6 @@
                         <div style="margin-bottom:12px;">
                             <div style="color:var(--mp-accent);font-weight:bold;">v1.9.7</div>
                             <div>• 修复配置修改后收起面板未保存的问题</div>
-                        </div>
-                        <div style="margin-bottom:12px;">
-                            <div style="color:var(--mp-accent);font-weight:bold;">v1.9.6</div>
-                            <div>• 排除护道者列表中的师父卡片，避免误选师父进行雇佣</div>
                         </div>
                     </div>
                 </div>
@@ -3203,8 +3191,8 @@
             </div>
 
             ${protectorSectionHTML}
-    
-            ${isInscription ? '' : (isTreasure ? '' : `
+
+            ${isTreasure || isInscription ? '' : `
             <div class="cfg-section">
                 <div class="cfg-section-label">通用设置</div>
                 <div class="cfg-row cfg-checkbox-row">
@@ -3238,8 +3226,9 @@
                         <span class="cfg-hint">冥想失败后多久重试</span>
                     </div>
                 </div>
-            </div>
+            </div>`}
 
+            ${isInscription ? '' : `
             <div class="cfg-section">
                 <div class="cfg-section-label">商人设置</div>
                 <div class="cfg-row">
@@ -3260,7 +3249,7 @@
                     <label class="cfg-label" style="margin-bottom:0;">无匹配时买最贵</label>
                     <span class="cfg-hint">关闭则无匹配时自动婉拒</span>
                 </div>
-            </div>`)}
+            </div>`}
 
             ${isTreasure ? `<div class="cfg-section">
                 <div class="cfg-section-label">寻宝设置</div>
